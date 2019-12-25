@@ -1,0 +1,35 @@
+[package]
+name = "ptt-crawler"
+version = "0.1.0"
+authors = ["cwouyang <cwouyang@protonmail.com>"]
+edition = "2018"
+license = "MIT"
+description = "A crawler for the web version of PTT, the largest online community in Taiwan"
+categories = ["command-line-utilities", "web-programming"]
+keywords = ["PTT", "crawler"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "pttcrawler"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pttcrawler"
+path = "src/main.rs"
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+serde = "1.0.27"
+serde_derive = "1.0.27"
+serde_json = "1.0.9"
+reqwest = "0.9.24"
+url = "2.1.0"
+select = "0.4.3"
+enum_from_str = "0.1.0"
+enum_from_str_derive = "0.1.0"
+regex = "1"
+lazy_static = "1.4.0"
+
+[dev-dependencies]
+load_file = "1.0.0"
