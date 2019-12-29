@@ -1,6 +1,7 @@
 extern crate chrono;
-extern crate enum_from_str;
-extern crate enum_from_str_derive;
+extern crate strum;
+#[macro_use]
+extern crate strum_macros;
 #[macro_use]
 extern crate lazy_static;
 #[cfg(test)]

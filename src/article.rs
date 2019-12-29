@@ -1,8 +1,6 @@
 use std::net::Ipv4Addr;
 
 use chrono::{prelude::*, DateTime};
-use enum_from_str::ParseEnumVariantError;
-use enum_from_str_derive::FromStr;
 
 /// Article stores the parsed result of an article
 #[derive(Deserialize, Clone, Debug)]
@@ -38,161 +36,161 @@ pub struct Reply {
 }
 
 /// ReplyType represents the type of a reply.
-#[derive(Deserialize, Clone, Debug, FromStr, PartialEq)]
+#[derive(Deserialize, Clone, Debug, EnumString, PartialEq)]
 pub enum ReplyType {
-    #[from_str = "推"]
+    #[strum(serialize = "推")]
     Push,
-    #[from_str = "→"]
+    #[strum(serialize = "→")]
     Neutral,
-    #[from_str = "噓"]
+    #[strum(serialize = "噓")]
     Boo,
 }
 
 /// BoardName represents the name of a board.
 /// Most of them are extracted from https://www.ptt.cc/bbs/hotboards.html
-#[derive(Deserialize, Clone, Debug, FromStr, PartialEq)]
+#[derive(Deserialize, Clone, Debug, EnumString, Display, PartialEq)]
 pub enum BoardName {
     AllTogether,
-    #[from_str = "Bank_Service"]
+    #[strum(serialize = "Bank_Service")]
     BankService,
     Baseball,
-    #[from_str = "basketballTW"]
+    #[strum(serialize = "basketballTW")]
     BasketballTW,
     Beauty,
     BeautySalon,
-    #[from_str = "biker"]
+    #[strum(serialize"biker")]
     Biker,
-    #[from_str = "Boy-Girl"]
+    #[strum(serialize = "Boy-Girl")]
     BoyGirl,
     Brand,
     BuyTogether,
-    #[from_str = "C_Chat"]
+    #[strum(serialize = "C_Chat")]
     CChat,
-    #[from_str = "car"]
+    #[strum(serialize = "car")]
     Car,
     CarShop,
-    #[from_str = "cat"]
+    #[strum(serialize = "cat")]
     Cat,
-    #[from_str = "China-Drama"]
+    #[strum(serialize = "China-Drama")]
     ChinaDrama,
-    #[from_str = "cookclub"]
+    #[strum(serialize = "cookclub")]
     CookClub,
-    #[from_str = "creditcard"]
+    #[strum(serialize = "creditcard")]
     CreditCard,
-    #[from_str = "DC_SALE"]
+    #[strum(serialize = "DC_SALE")]
     DcSale,
-    #[from_str = "DMM_GAMES"]
+    #[strum(serialize = "DMM_GAMES")]
     DmmGames,
-    #[from_str = "Drama-Ticket"]
+    #[strum(serialize = "Drama-Ticket")]
     DramaTicket,
-    #[from_str = "DSLR"]
+    #[strum(serialize = "DSLR")]
     Dslr,
-    #[from_str = "E-appliance"]
+    #[strum(serialize = "E-appliance")]
     EAppliance,
-    #[from_str = "e-shopping"]
+    #[strum(serialize = "e-shopping")]
     EShopping,
     Examination,
-    #[from_str = "fastfood"]
+    #[strum(serialize = "fastfood")]
     FastFood,
-    #[from_str = "FATE_GO"]
+    #[strum(serialize = "FATE_GO")]
     FateGo,
     Finance,
     Food,
-    #[from_str = "forsale"]
+    #[strum(serialize = "forsale")]
     ForSale,
-    #[from_str = "Gamesale"]
+    #[strum(serialize = "Gamesale")]
     GameSale,
-    #[from_str = "gay"]
+    #[strum(serialize = "gay")]
     Gay,
-    #[from_str = "GBF"]
+    #[strum(serialize = "GBF")]
     Gbf,
     GetMarry,
-    #[from_str = "give"]
+    #[strum(serialize = "give")]
     Give,
     Gossiping,
     HardwareSale,
     HatePolitics,
-    #[from_str = "HBL"]
+    #[strum(serialize = "HBL")]
     Hbl,
     Headphone,
     Hearthstone,
     HelpBuy,
-    #[from_str = "home-sale"]
+    #[strum(serialize = "home-sale")]
     HomeSale,
-    #[from_str = "hypermall"]
+    #[strum(serialize = "hypermall")]
     HyperMall,
     Insurance,
-    #[from_str = "iOS"]
+    #[strum(serialize = "iOS")]
     IOs,
-    #[from_str = "IU"]
+    #[strum(serialize = "IU")]
     Iu,
-    #[from_str = "Japan_Travel"]
+    #[strum(serialize = "Japan_Travel")]
     JapanTravel,
-    #[from_str = "japanavgirls"]
+    #[strum(serialize = "japanavgirls")]
     JapanAvGirls,
-    #[from_str = "Japandrama"]
+    #[strum(serialize = "Japandrama")]
     JapanDrama,
-    #[from_str = "joke"]
+    #[strum(serialize = "joke")]
     Joke,
     Kaohsiung,
-    #[from_str = "Key_Mou_Pad"]
+    #[strum(serialize = "Key_Mou_Pad")]
     KeyMouPad,
     KoreaDrama,
     KoreaStar,
     KoreanPop,
     Lakers,
-    #[from_str = "lesbian"]
+    #[strum(serialize = "lesbian")]
     Lesbian,
-    #[from_str = "Lifeismoney"]
+    #[strum(serialize = "Lifeismoney")]
     LifeIsMoney,
     LoL,
     MacShop,
     MakeUp,
-    #[from_str = "marriage"]
+    #[strum(serialize = "marriage")]
     Marriage,
-    #[from_str = "marvel"]
+    #[strum(serialize = "marvel")]
     Marvel,
     MayDay,
-    #[from_str = "medstudent"]
+    #[strum(serialize = "medstudent")]
     Medstudent,
     Military,
-    #[from_str = "MLB"]
+    #[strum(serialize = "MLB")]
     Mlb,
     MobileComm,
-    #[from_str = "Mobile-game"]
+    #[strum(serialize = "Mobile-game")]
     MobileGame,
     MobilePay,
-    #[from_str = "mobilesales"]
+    #[strum(serialize = "mobilesales")]
     MobileSales,
-    #[from_str = "movie"]
+    #[strum(serialize = "movie")]
     Movie,
     MuscleBeach,
-    #[from_str = "nb-shopping"]
+    #[strum(serialize = "nb-shopping")]
     NbShopping,
-    #[from_str = "NBA"]
+    #[strum(serialize = "NBA")]
     Nba,
-    #[from_str = "NBA_Film"]
+    #[strum(serialize = "NBA_Film")]
     NbaFilm,
     Nogizaka46,
     NSwitch,
-    #[from_str = "ONE_PIECE"]
+    #[strum(serialize = "ONE_PIECE")]
     OnePiece,
-    #[from_str = "Palmar_Drama"]
+    #[strum(serialize = "Palmar_Drama")]
     PalmarDrama,
-    #[from_str = "part-time"]
+    #[strum(serialize = "part-time")]
     PartTime,
-    #[from_str = "PathofExile"]
+    #[strum(serialize = "PathofExile")]
     PathOfExile,
-    #[from_str = "PC_Shopping"]
+    #[strum(serialize = "PC_Shopping")]
     PcShopping,
     PlayStation,
     PokeMon,
     PokemonGO,
     PuzzleDragon,
     Salary,
-    #[from_str = "sex"]
+    #[strum(serialize = "sex")]
     Sex,
-    #[from_str = "Soft_Job"]
+    #[strum(serialize = "Soft_Job")]
     SoftJob,
     SportLottery,
     Steam,
@@ -201,22 +199,22 @@ pub enum BoardName {
     TaichungBun,
     Tainan,
     TaiwanDrama,
-    #[from_str = "Tech_Job"]
+    #[strum(serialize = "Tech_Job")]
     TechJob,
     ToS,
-    #[from_str = "TW_Entertain"]
+    #[strum(serialize = "TW_Entertain")]
     TwEntertain,
-    #[from_str = "TWICE"]
+    #[strum(serialize = "TWICE")]
     Twice,
     TypeMoon,
     Wanted,
-    #[from_str = "watch"]
+    #[strum(serialize = "watch")]
     Watch,
     WomenTalk,
-    #[from_str = "WOW"]
+    #[strum(serialize = "WOW")]
     Wow,
     Zastrology,
-    #[from_str = "EAseries"]
+    #[strum(serialize = "EAseries")]
     EASeries,
     Unknown,
 }
