@@ -8,6 +8,17 @@ use select::{document::Document, node::Node};
 use crate::article::{Article, BoardName, Reply, ReplyCount, ReplyType};
 use crate::crawler;
 
+lazy_static! {
+    static ref TW_TIME_OFFSET: FixedOffset = FixedOffset::east(8 * 3600);
+}
+
+/// Error represents the errors which might occur when parsing.
+#[derive(Debug)]
+pub enum Error {
+    InvalidFormat,
+    FieldNotFound,
+}
+
 pub fn parse(document: &Document) -> Result<Article, crawler::Error> {
     if !is_article_exist(&document) {
         return Err(crawler::Error::InvalidResponse);
@@ -71,7 +82,8 @@ fn parse_meta(
     };
     let (author_id, author_name) = parse_author(document);
     let board = parse_board(document);
-    let date = parse_date(document);
+    let date = parse_date(document, &TW_TIME_OFFSET)
+        .unwrap_or(Local::now().with_timezone(&TW_TIME_OFFSET));
     let ip = parse_ip(document);
 
     (id, category, title, author_id, author_name, board, date, ip)
@@ -140,19 +152,39 @@ fn parse_board(document: &Document) -> BoardName {
     board.parse::<BoardName>().unwrap_or(BoardName::Unknown)
 }
 
-fn parse_date(document: &Document) -> DateTime<FixedOffset> {
-    let fixed_offset = FixedOffset::east(8 * 3600);
-    let time = document
+fn parse_date(
+    document: &Document,
+    fixed_offset: &FixedOffset,
+) -> Result<DateTime<FixedOffset>, Error> {
+    lazy_static! {
+        static ref RE: Regex =
+            Regex::new(r"(?P<date>\w{3} \w{3} \d{2} \d{2}:\d{2}:\d{2} \d{4})").unwrap();
+    }
+
+    let time_str = match document
         .find(Name("span").and(Class("article-meta-value")))
         .nth(3)
-        .unwrap()
-        .inner_html();
-    match NaiveDateTime::parse_from_str(&time, "%a %b  %e %H:%M:%S %Y") {
+    {
+        Some(node) => node.text(),
+        None => {
+            let main_content = document
+                .find(Name("div").and(Attr("id", "main-content")))
+                .nth(0)
+                .unwrap()
+                .text();
+            match RE.captures(&main_content) {
+                Some(cap) => cap["date"].to_owned(),
+                None => return Err(Error::FieldNotFound),
+            }
+        }
+    };
+
+    match NaiveDateTime::parse_from_str(&time_str, "%a %b  %e %H:%M:%S %Y") {
         Ok(time) => match fixed_offset.from_local_datetime(&time) {
-            LocalResult::Single(offset_time) => offset_time,
-            _ => Local::now().with_timezone(&fixed_offset),
+            LocalResult::Single(offset_time) => Ok(offset_time),
+            _ => Err(Error::InvalidFormat),
         },
-        Err(_) => Local::now().with_timezone(&fixed_offset),
+        Err(_) => Err(Error::InvalidFormat),
     }
 }
 
@@ -340,7 +372,23 @@ mod tests {
             .ymd(2007, 6, 14)
             .and_hms(14, 18, 43);
 
-        assert_eq!(parse_date(&documents), article_date);
+        assert_eq!(
+            parse_date(&documents, &TW_TIME_OFFSET).unwrap(),
+            article_date
+        );
+    }
+
+    #[test]
+    fn test_parse_date_with_abnormal_location() {
+        let documents = load_document("../tests/Soft_Job_M.1181824048.A.244.html");
+        let article_date = FixedOffset::east(8 * 3600)
+            .ymd(2007, 6, 14)
+            .and_hms(20, 27, 24);
+
+        assert_eq!(
+            parse_date(&documents, &TW_TIME_OFFSET).unwrap(),
+            article_date
+        );
     }
 
     #[test]
