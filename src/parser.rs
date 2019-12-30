@@ -232,11 +232,15 @@ fn parse_content(document: &Document) -> String {
 fn parse_replies(document: &Document, article_time: &DateTime<FixedOffset>) -> Vec<Reply> {
     document
         .find(Name("div").and(Class("push")))
-        .map(|n| parse_reply(&n, article_time.year()))
+        .flat_map(|n| parse_reply(&n, article_time.year()))
         .collect::<Vec<Reply>>()
 }
 
-fn parse_reply(node: &Node, article_year: i32) -> Reply {
+fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
+    if node.text() == "檔案過大！部分文章無法顯示" {
+        return Err(Error::InvalidFormat);
+    }
+
     let fixed_offset = FixedOffset::east(8 * 3600);
     let reply_type = node
         .find(Name("span").and(Class("push-tag")))
@@ -272,12 +276,12 @@ fn parse_reply(node: &Node, article_year: i32) -> Reply {
         Err(_) => Local::now().with_timezone(&fixed_offset),
     };
 
-    return Reply {
+    Ok(Reply {
         author_id,
         reply_type,
         content,
         date,
-    };
+    })
 }
 
 #[cfg(test)]
@@ -399,6 +403,17 @@ mod tests {
             .and_hms(14, 18, 43);
 
         assert_eq!(parse_replies(&documents, &article_date).len(), 5)
+    }
+
+    #[test]
+    fn test_parse_replies_with_warning_message() {
+        // contains "檔案過大！部分文章無法顯示"
+        let documents = load_document("../tests/Gossiping_M.1119222611.A.7A9.html");
+        let article_date = FixedOffset::east(8 * 3600)
+            .ymd(2005, 6, 20)
+            .and_hms(7, 11, 31);
+
+        assert_eq!(parse_replies(&documents, &article_date).len(), 1491)
     }
 
     #[test]
