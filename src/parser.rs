@@ -167,11 +167,7 @@ fn parse_date(
     {
         Some(node) => node.text(),
         None => {
-            let main_content = document
-                .find(Name("div").and(Attr("id", "main-content")))
-                .nth(0)
-                .unwrap()
-                .text();
+            let main_content = get_main_content(document);
             match RE.captures(&main_content) {
                 Some(cap) => cap["date"].to_owned(),
                 None => return Err(Error::FieldNotFound),
@@ -193,36 +189,35 @@ fn parse_ip(document: &Document) -> Ipv4Addr {
         static ref RE: Regex = Regex::new(r"(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})").unwrap();
     }
 
-    let s = match document
+    let str_contain_ip = match document
         .find(Name("span").and(Class("f2")))
-        .map(|n| n.inner_html())
+        .map(|n| n.text())
         .find(|html| html.contains("發信站: 批踢踢實業坊(ptt.cc), 來自:"))
     {
         Some(ip) => ip,
         None => {
-            let main_content = document
-                .find(Name("div").and(Attr("id", "main-content")))
-                .nth(0)
-                .unwrap()
-                .text();
+            let main_content = get_main_content(document);
             let sub_content_start_index =
                 main_content.find("發信站: 批踢踢實業坊(ptt.cc)").unwrap();
             main_content[sub_content_start_index..].to_owned()
         }
     };
-
-    match RE.captures(&s) {
+    match RE.captures(&str_contain_ip) {
         Some(cap) => cap["ip"].parse::<Ipv4Addr>().unwrap(),
         None => Ipv4Addr::new(0, 0, 0, 0),
     }
 }
 
-fn parse_content(document: &Document) -> String {
-    let main_content = document
+fn get_main_content(document: &Document) -> String {
+    document
         .find(Name("div").and(Attr("id", "main-content")))
         .nth(0)
         .unwrap()
-        .text();
+        .text()
+}
+
+fn parse_content(document: &Document) -> String {
+    let main_content = get_main_content(document);
     let content_start_index = main_content.find('\n').unwrap();
     let content_end_index = main_content.find("--\n※").unwrap();
     let content = &main_content[content_start_index..content_end_index];
