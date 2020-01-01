@@ -281,6 +281,7 @@ fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::{assert_eq, assert_ne};
     use select::document::Document;
 
     use super::*;
