@@ -82,8 +82,7 @@ fn parse_meta(
     };
     let (author_id, author_name) = parse_author(document);
     let board = parse_board(document);
-    let date = parse_date(document, &TW_TIME_OFFSET)
-        .unwrap_or(Local::now().with_timezone(&TW_TIME_OFFSET));
+    let date = parse_date(document).unwrap();
     let ip = parse_ip(document);
 
     (id, category, title, author_id, author_name, board, date, ip)
@@ -152,13 +151,11 @@ fn parse_board(document: &Document) -> BoardName {
     board.parse::<BoardName>().unwrap_or(BoardName::Unknown)
 }
 
-fn parse_date(
-    document: &Document,
-    fixed_offset: &FixedOffset,
-) -> Result<DateTime<FixedOffset>, Error> {
+fn parse_date(document: &Document) -> Result<DateTime<FixedOffset>, Error> {
     lazy_static! {
         static ref RE: Regex =
             Regex::new(r"(?P<date>\w{3} \w{3} \d{2} \d{2}:\d{2}:\d{2} \d{4})").unwrap();
+        static ref DATE_FORMAT: &'static str = "%a %b  %e %H:%M:%S %Y";
     }
 
     let time_str = match document
@@ -175,12 +172,19 @@ fn parse_date(
         }
     };
 
-    match NaiveDateTime::parse_from_str(&time_str, "%a %b  %e %H:%M:%S %Y") {
-        Ok(time) => match fixed_offset.from_local_datetime(&time) {
-            LocalResult::Single(offset_time) => Ok(offset_time),
+    parse_date_from_str(&time_str, &DATE_FORMAT)
+}
+
+fn parse_date_from_str(date_str: &str, format: &str) -> Result<DateTime<FixedOffset>, Error> {
+    match NaiveDateTime::parse_from_str(date_str, format) {
+        Ok(date) => match TW_TIME_OFFSET.from_local_datetime(&date) {
+            LocalResult::Single(offset_date) => Ok(offset_date),
             _ => Err(Error::InvalidFormat),
         },
-        Err(_) => Err(Error::InvalidFormat),
+        Err(e) => {
+            error!("{:?}", e);
+            Err(Error::InvalidFormat)
+        }
     }
 }
 
@@ -235,16 +239,16 @@ fn parse_replies(document: &Document, article_time: &DateTime<FixedOffset>) -> V
 fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
     lazy_static! {
         static ref RE: Regex = Regex::new(
-            r"(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})?\s?(?P<date>\d{2}/\d{2}( \d{2}:\d{2})?)"
+            r"(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})?\s?(?P<month>\d{2})/(?P<day>\d{2})(\s*(?P<hour>\d{2}):(?P<min>\d{2}))?"
         )
         .unwrap();
     }
 
     if node.text() == "檔案過大！部分文章無法顯示" {
+        error!("Invalid format of reply {:?}", node.text());
         return Err(Error::InvalidFormat);
     }
 
-    let fixed_offset = FixedOffset::east(8 * 3600);
     let reply_type = node
         .find(Name("span").and(Class("push-tag")))
         .nth(0)
@@ -271,25 +275,38 @@ fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
         .unwrap()
         .text();
     ip_and_time = ip_and_time.trim().to_owned();
-    let (ip, time) = match RE.captures(&ip_and_time) {
+    let (ip, month, day, hour, min) = match RE.captures(&ip_and_time) {
         Some(cap) => {
             let ip_str = match cap.name("ip") {
                 Some(m) => m.as_str(),
                 None => "0.0.0.0",
             };
             let ip = ip_str.parse::<Ipv4Addr>().unwrap();
-            (Some(ip), cap["date"].trim().to_owned())
+            let month = cap["month"].parse::<u32>().unwrap();
+            let day = cap["day"].parse::<u32>().unwrap();
+            let hour: u32 = match cap.name("hour") {
+                Some(m) => m.as_str().parse::<u32>().unwrap(),
+                None => 0,
+            };
+            let min: u32 = match cap.name("min") {
+                Some(m) => m.as_str().parse::<u32>().unwrap(),
+                None => 0,
+            };
+            (Some(ip), month, day, hour, min)
         }
-        None => return Err(Error::InvalidFormat),
+        None => {
+            error!("Invalid format of reply {:?}", node.text());
+            return Err(Error::InvalidFormat);
+        }
     };
-    let time_with_year = format!("{}/{}", article_year, time);
-    let date = match NaiveDateTime::parse_from_str(&time_with_year, "%Y/%m/%d %H:%M") {
-        Ok(time) => match fixed_offset.from_local_datetime(&time) {
-            LocalResult::Single(offset_time) => offset_time,
-            _ => Local::now().with_timezone(&fixed_offset),
-        },
-        Err(_) => Local::now().with_timezone(&fixed_offset),
-    };
+
+    let mut year = article_year;
+    if month == 2 && day == 29 {
+        while !is_leap_year(year) {
+            year += 1;
+        }
+    }
+    let date = TW_TIME_OFFSET.ymd(year, month, day).and_hms(hour, min, 0);
 
     Ok(Reply {
         author_id,
@@ -300,9 +317,13 @@ fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
     })
 }
 
+fn is_leap_year(year: i32) -> bool {
+    return (year % 4 == 0) && (year % 100 != 0 || year % 400 == 0);
+}
+
 #[cfg(test)]
 mod tests {
-    use pretty_assertions::{assert_eq, assert_ne};
+    use pretty_assertions::assert_eq;
     use select::document::Document;
 
     use super::*;
@@ -393,10 +414,7 @@ mod tests {
             .ymd(2007, 6, 14)
             .and_hms(14, 18, 43);
 
-        assert_eq!(
-            parse_date(&documents, &TW_TIME_OFFSET).unwrap(),
-            article_date
-        );
+        assert_eq!(parse_date(&documents).unwrap(), article_date);
     }
 
     #[test]
@@ -406,10 +424,7 @@ mod tests {
             .ymd(2007, 6, 14)
             .and_hms(20, 27, 24);
 
-        assert_eq!(
-            parse_date(&documents, &TW_TIME_OFFSET).unwrap(),
-            article_date
-        );
+        assert_eq!(parse_date(&documents).unwrap(), article_date);
     }
 
     #[test]
