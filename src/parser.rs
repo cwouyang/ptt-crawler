@@ -311,11 +311,9 @@ fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
     ip_and_time = ip_and_time.trim().to_owned();
     let (ip, month, day, hour, min) = match RE.captures(&ip_and_time) {
         Some(cap) => {
-            let ip_str = match cap.name("ip") {
-                Some(m) => m.as_str(),
-                None => "0.0.0.0",
-            };
-            let ip = ip_str.parse::<Ipv4Addr>().unwrap();
+            let ip = cap
+                .name("ip")
+                .map(|m| m.as_str().parse::<Ipv4Addr>().unwrap());
             let month = cap["month"].parse::<u32>().unwrap();
             let day = cap["day"].parse::<u32>().unwrap();
             let hour: u32 = match cap.name("hour") {
@@ -326,7 +324,7 @@ fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
                 Some(m) => m.as_str().parse::<u32>().unwrap(),
                 None => 0,
             };
-            (Some(ip), month, day, hour, min)
+            (ip, month, day, hour, min)
         }
         None => {
             error!("Invalid format of reply {:?}", node.text());
