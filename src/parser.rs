@@ -233,6 +233,13 @@ fn parse_replies(document: &Document, article_time: &DateTime<FixedOffset>) -> V
 }
 
 fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(
+            r"(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})?\s?(?P<date>\d{2}/\d{2}( \d{2}:\d{2})?)"
+        )
+        .unwrap();
+    }
+
     if node.text() == "檔案過大！部分文章無法顯示" {
         return Err(Error::InvalidFormat);
     }
@@ -258,12 +265,24 @@ fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
         .text()
         .trim_start_matches(|c| (c == ':' || c == ' '))
         .to_owned();
-    let time = node
+    let mut ip_and_time = node
         .find(Name("span").and(Class("push-ipdatetime")))
         .nth(0)
         .unwrap()
         .text();
-    let time_with_year = format!("{}/{}", article_year, time.trim());
+    ip_and_time = ip_and_time.trim().to_owned();
+    let (ip, time) = match RE.captures(&ip_and_time) {
+        Some(cap) => {
+            let ip_str = match cap.name("ip") {
+                Some(m) => m.as_str(),
+                None => "0.0.0.0",
+            };
+            let ip = ip_str.parse::<Ipv4Addr>().unwrap();
+            (Some(ip), cap["date"].trim().to_owned())
+        }
+        None => return Err(Error::InvalidFormat),
+    };
+    let time_with_year = format!("{}/{}", article_year, time);
     let date = match NaiveDateTime::parse_from_str(&time_with_year, "%Y/%m/%d %H:%M") {
         Ok(time) => match fixed_offset.from_local_datetime(&time) {
             LocalResult::Single(offset_time) => offset_time,
@@ -276,6 +295,7 @@ fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
         author_id,
         reply_type,
         content,
+        ip,
         date,
     })
 }

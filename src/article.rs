@@ -31,6 +31,7 @@ pub struct ReplyCount {
 pub struct Reply {
     pub author_id: String,
     pub content: String,
+    pub ip: Option<Ipv4Addr>,
     pub date: DateTime<FixedOffset>,
     pub reply_type: ReplyType,
 }
