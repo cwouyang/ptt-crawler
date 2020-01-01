@@ -108,13 +108,24 @@ fn parse_title(document: &Document) -> (Option<String>, String) {
             Regex::new(r"((\[|［)(?P<category>\w+)+(\]|］)\s*)?(?P<title>.+)").unwrap();
     }
 
-    let original_title = document
+    let original_title = match document
         .find(Name("meta").and(Attr("property", "og:title")))
         .nth(0)
-        .unwrap()
-        .attr("content")
-        .unwrap();
-    match RE.captures(original_title) {
+    {
+        Some(n) => n.attr("content").unwrap().to_owned(),
+        None => {
+            let title_node = document
+                .find(Name("span"))
+                .find(|n| {
+                    let text = n.text();
+                    text.trim().eq("標題")
+                })
+                .unwrap();
+            title_node.next().unwrap().text().to_owned()
+        }
+    };
+    let trim_title = original_title.trim();
+    match RE.captures(trim_title) {
         Some(cap) => (
             match cap.name("category") {
                 Some(m) => Some(m.as_str().to_owned()),
@@ -122,7 +133,7 @@ fn parse_title(document: &Document) -> (Option<String>, String) {
             },
             cap["title"].to_owned(),
         ),
-        None => (None, original_title.to_owned()),
+        None => (None, trim_title.to_owned()),
     }
 }
 
@@ -378,6 +389,18 @@ mod tests {
     fn test_parse_title_as_reply() {
         let documents = load_document("../tests/Soft_Job_M.1181804025.A.7A7.html");
         assert_eq!(parse_title(&documents), (None, "恭喜開板 ^^".to_owned()));
+    }
+
+    #[test]
+    fn test_parse_title_not_in_html_meta() {
+        let documents = load_document("../tests/Gossiping_M.1123769450.A.A1A.html");
+        assert_eq!(
+            parse_title(&documents),
+            (
+                Some("名人".to_owned()),
+                "有沒有人有希特勒的八卦阿".to_owned()
+            )
+        );
     }
 
     #[test]
