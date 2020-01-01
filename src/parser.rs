@@ -166,11 +166,22 @@ fn parse_author(document: &Document) -> (String, Option<String>) {
 }
 
 fn parse_board(document: &Document) -> BoardName {
-    let board = document
+    let board = match document
         .find(Name("span").and(Class("article-meta-value")))
         .nth(1)
-        .unwrap()
-        .inner_html();
+    {
+        Some(n) => n.text(),
+        None => {
+            let board_node = document
+                .find(Name("span"))
+                .find(|n| {
+                    let text = n.text();
+                    text.trim().eq("看板")
+                })
+                .unwrap();
+            board_node.next().unwrap().text().to_owned()
+        }
+    };
     board.parse::<BoardName>().unwrap_or(BoardName::Unknown)
 }
 
@@ -447,6 +458,13 @@ mod tests {
         let documents = load_document("../tests/Soft_Job_M.1181801925.A.86E.html");
 
         assert_eq!(parse_board(&documents), BoardName::SoftJob);
+    }
+
+    #[test]
+    fn test_parse_board_not_in_html_meta() {
+        let documents = load_document("../tests/Gossiping_M.1123769450.A.A1A.html");
+
+        assert_eq!(parse_board(&documents), BoardName::Gossiping);
     }
 
     #[test]
