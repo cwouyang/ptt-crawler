@@ -142,14 +142,26 @@ fn parse_author(document: &Document) -> (String, Option<String>) {
         static ref RE: Regex = Regex::new(r"(?P<id>\w+)\s\((?P<name>.+)\)").unwrap();
     }
 
-    let author = document
+    let author = match document
         .find(Name("span").and(Class("article-meta-value")))
         .nth(0)
-        .unwrap()
-        .text();
-    match RE.captures(&author) {
+    {
+        Some(n) => n.text(),
+        None => {
+            let author_node = document
+                .find(Name("span"))
+                .find(|n| {
+                    let text = n.text();
+                    text.trim().eq("作者")
+                })
+                .unwrap();
+            author_node.next().unwrap().text().to_owned()
+        }
+    };
+    let trim_author = author.trim();
+    match RE.captures(trim_author) {
         Some(cap) => (cap["id"].to_owned(), Some(cap["name"].to_owned())),
-        None => (author.to_owned(), None),
+        None => (trim_author.to_owned(), None),
     }
 }
 
@@ -421,6 +433,13 @@ mod tests {
             parse_author(&documents),
             ("eggimage".to_owned(), Some("雞蛋非人哉啊....".to_owned()))
         );
+    }
+
+    #[test]
+    fn test_parse_author_not_in_html_meta() {
+        let documents = load_document("../tests/Gossiping_M.1123769450.A.A1A.html");
+
+        assert_eq!(parse_author(&documents), ("MOTHERGOOSE".to_owned(), None));
     }
 
     #[test]
