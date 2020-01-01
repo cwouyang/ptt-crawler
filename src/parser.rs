@@ -220,7 +220,7 @@ fn get_main_content(document: &Document) -> String {
 fn parse_content(document: &Document) -> String {
     let main_content = get_main_content(document);
     let content_start_index = main_content.find('\n').unwrap();
-    let content_end_index = main_content.find("--\n※").unwrap();
+    let content_end_index = main_content.find("\n※").unwrap();
     let content = &main_content[content_start_index..content_end_index];
     content.trim().to_owned()
 }
