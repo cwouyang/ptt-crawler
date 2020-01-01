@@ -192,13 +192,14 @@ fn parse_ip(document: &Document) -> Ipv4Addr {
     let str_contain_ip = match document
         .find(Name("span").and(Class("f2")))
         .map(|n| n.text())
-        .find(|html| html.contains("發信站: 批踢踢實業坊(ptt.cc), 來自:"))
+        .find(|s| (s.contains("來自:") || s.contains("From:")))
     {
-        Some(ip) => ip,
+        Some(ip) => ip.to_owned(),
         None => {
             let main_content = get_main_content(document);
-            let sub_content_start_index =
-                main_content.find("發信站: 批踢踢實業坊(ptt.cc)").unwrap();
+            let sub_content_start_index = main_content
+                .find("來自:")
+                .unwrap_or_else(|| main_content.find("From:").unwrap_or_default());
             main_content[sub_content_start_index..].to_owned()
         }
     };
@@ -426,5 +427,11 @@ mod tests {
     fn test_parse_ip() {
         let documents = load_document("../tests/Soft_Job_M.1181801925.A.86E.html");
         assert_eq!(parse_ip(&documents), Ipv4Addr::new(125, 232, 236, 105));
+    }
+
+    #[test]
+    fn test_parse_ip2() {
+        let documents = load_document("../tests/Gossiping_M.1119222660.A.94E.html");
+        assert_eq!(parse_ip(&documents), Ipv4Addr::new(138, 130, 212, 179));
     }
 }
