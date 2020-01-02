@@ -123,11 +123,24 @@ fn parse_title(document: &Document) -> Result<(Option<String>, String), Error> {
                 let text = n.text();
                 text.trim().eq("標題")
             });
-            if title_node.is_none() {
-                error!("Title field not found");
-                return Err(Error::FieldNotFound("title".to_owned()));
+            if title_node.is_some() {
+                title_node.unwrap().next().unwrap().text().to_owned()
+            } else {
+                let main_content = get_main_content(document);
+                match main_content.find("標題:") {
+                    Some(mut title_start_index) => {
+                        let title = main_content[title_start_index..].to_owned();
+                        let title_colon_index = title.find(':').unwrap();
+                        let title_end_index = title.find('\n').unwrap();
+                        title_start_index = title_colon_index + 1;
+                        title[title_start_index..title_end_index].to_owned()
+                    }
+                    None => {
+                        error!("Title field not found");
+                        return Err(Error::FieldNotFound("title".to_owned()));
+                    }
+                }
             }
-            title_node.unwrap().next().unwrap().text().to_owned()
         }
     };
     let trim_title = original_title.trim();
@@ -447,6 +460,15 @@ mod tests {
                 Some("名人".to_owned()),
                 "有沒有人有希特勒的八卦阿".to_owned()
             )
+        );
+    }
+
+    #[test]
+    fn test_parse_title_within_content() {
+        let documents = load_document("../tests/Gossiping_M.1173456473.A.F4F.html");
+        assert_eq!(
+            parse_title(&documents).unwrap(),
+            (None, "Re: 有沒有俄國人的八卦？".to_owned())
         );
     }
 
