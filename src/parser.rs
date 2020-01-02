@@ -6,7 +6,6 @@ use select::predicate::{Attr, Class, Name, Predicate};
 use select::{document::Document, node::Node};
 
 use crate::article::{Article, BoardName, Reply, ReplyCount, ReplyType};
-use crate::crawler;
 
 lazy_static! {
     static ref TW_TIME_OFFSET: FixedOffset = FixedOffset::east(8 * 3600);
@@ -15,16 +14,18 @@ lazy_static! {
 /// Error represents the errors which might occur when parsing.
 #[derive(Debug)]
 pub enum Error {
+    DeletedArticle,
     InvalidFormat,
-    FieldNotFound,
+    FieldNotFound(String),
 }
 
-pub fn parse(document: &Document) -> Result<Article, crawler::Error> {
+pub fn parse(document: &Document) -> Result<Article, Error> {
     if !is_article_exist(&document) {
-        return Err(crawler::Error::InvalidResponse);
+        warn!("article deleted");
+        return Err(Error::DeletedArticle);
     }
 
-    let (id, category, title, author_id, author_name, board, date, ip) = parse_meta(&document);
+    let (id, category, title, author_id, author_name, board, date, ip) = parse_meta(&document)?;
     let content = parse_content(&document);
     let replies = parse_replies(&document, &date);
 
@@ -65,27 +66,31 @@ fn is_article_exist(document: &Document) -> bool {
 
 fn parse_meta(
     document: &Document,
-) -> (
-    String,
-    String,
-    String,
-    String,
-    Option<String>,
-    BoardName,
-    DateTime<FixedOffset>,
-    Ipv4Addr,
-) {
+) -> Result<
+    (
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+        BoardName,
+        DateTime<FixedOffset>,
+        Ipv4Addr,
+    ),
+    Error,
+> {
     let id = parse_id(document);
     let (category, title) = match parse_title(document) {
-        (Some(category), title) => (category, title),
-        (None, title) => ("".to_owned(), title),
+        Ok((Some(category), title)) => (category, title),
+        Ok((None, title)) => ("".to_owned(), title),
+        Err(e) => return Err(e),
     };
-    let (author_id, author_name) = parse_author(document);
-    let board = parse_board(document);
+    let (author_id, author_name) = parse_author(document)?;
+    let board = parse_board(document)?;
     let date = parse_date(document).unwrap();
     let ip = parse_ip(document);
 
-    (id, category, title, author_id, author_name, board, date, ip)
+    Ok((id, category, title, author_id, author_name, board, date, ip))
 }
 
 fn parse_id(document: &Document) -> String {
@@ -102,7 +107,7 @@ fn parse_id(document: &Document) -> String {
     id.to_owned()
 }
 
-fn parse_title(document: &Document) -> (Option<String>, String) {
+fn parse_title(document: &Document) -> Result<(Option<String>, String), Error> {
     lazy_static! {
         static ref RE: Regex =
             Regex::new(r"((\[|［)(?P<category>\w+)+(\]|］)\s*)?(?P<title>.+)").unwrap();
@@ -114,18 +119,19 @@ fn parse_title(document: &Document) -> (Option<String>, String) {
     {
         Some(n) => n.attr("content").unwrap().to_owned(),
         None => {
-            let title_node = document
-                .find(Name("span"))
-                .find(|n| {
-                    let text = n.text();
-                    text.trim().eq("標題")
-                })
-                .unwrap();
-            title_node.next().unwrap().text().to_owned()
+            let title_node = document.find(Name("span")).find(|n| {
+                let text = n.text();
+                text.trim().eq("標題")
+            });
+            if title_node.is_none() {
+                error!("Title field not found");
+                return Err(Error::FieldNotFound("title".to_owned()));
+            }
+            title_node.unwrap().next().unwrap().text().to_owned()
         }
     };
     let trim_title = original_title.trim();
-    match RE.captures(trim_title) {
+    Ok(match RE.captures(trim_title) {
         Some(cap) => (
             match cap.name("category") {
                 Some(m) => Some(m.as_str().to_owned()),
@@ -134,10 +140,10 @@ fn parse_title(document: &Document) -> (Option<String>, String) {
             cap["title"].to_owned(),
         ),
         None => (None, trim_title.to_owned()),
-    }
+    })
 }
 
-fn parse_author(document: &Document) -> (String, Option<String>) {
+fn parse_author(document: &Document) -> Result<(String, Option<String>), Error> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"(?P<id>\w+)\s\((?P<name>.+)\)").unwrap();
     }
@@ -148,41 +154,43 @@ fn parse_author(document: &Document) -> (String, Option<String>) {
     {
         Some(n) => n.text(),
         None => {
-            let author_node = document
-                .find(Name("span"))
-                .find(|n| {
-                    let text = n.text();
-                    text.trim().eq("作者")
-                })
-                .unwrap();
-            author_node.next().unwrap().text().to_owned()
+            let author_node = document.find(Name("span")).find(|n| {
+                let text = n.text();
+                text.trim().eq("作者")
+            });
+            if author_node.is_none() {
+                error!("Author field not found");
+                return Err(Error::FieldNotFound("author".to_owned()));
+            }
+            author_node.unwrap().next().unwrap().text().to_owned()
         }
     };
     let trim_author = author.trim();
     match RE.captures(trim_author) {
-        Some(cap) => (cap["id"].to_owned(), Some(cap["name"].to_owned())),
-        None => (trim_author.to_owned(), None),
+        Some(cap) => Ok((cap["id"].to_owned(), Some(cap["name"].to_owned()))),
+        None => Ok((trim_author.to_owned(), None)),
     }
 }
 
-fn parse_board(document: &Document) -> BoardName {
+fn parse_board(document: &Document) -> Result<BoardName, Error> {
     let board = match document
         .find(Name("span").and(Class("article-meta-value")))
         .nth(1)
     {
         Some(n) => n.text(),
         None => {
-            let board_node = document
-                .find(Name("span"))
-                .find(|n| {
-                    let text = n.text();
-                    text.trim().eq("看板")
-                })
-                .unwrap();
-            board_node.next().unwrap().text().to_owned()
+            let board_node = document.find(Name("span")).find(|n| {
+                let text = n.text();
+                text.trim().eq("看板")
+            });
+            if board_node.is_none() {
+                error!("Board field not found");
+                return Err(Error::FieldNotFound("board".to_owned()));
+            }
+            board_node.unwrap().next().unwrap().text().to_owned()
         }
     };
-    board.parse::<BoardName>().unwrap_or(BoardName::Unknown)
+    Ok(board.parse::<BoardName>().unwrap_or(BoardName::Unknown))
 }
 
 fn parse_date(document: &Document) -> Result<DateTime<FixedOffset>, Error> {
@@ -201,7 +209,7 @@ fn parse_date(document: &Document) -> Result<DateTime<FixedOffset>, Error> {
             let main_content = get_main_content(document);
             match RE.captures(&main_content) {
                 Some(cap) => cap["date"].to_owned(),
-                None => return Err(Error::FieldNotFound),
+                None => return Err(Error::FieldNotFound("date".to_owned())),
             }
         }
     };
@@ -213,10 +221,19 @@ fn parse_date_from_str(date_str: &str, format: &str) -> Result<DateTime<FixedOff
     match NaiveDateTime::parse_from_str(date_str, format) {
         Ok(date) => match TW_TIME_OFFSET.from_local_datetime(&date) {
             LocalResult::Single(offset_date) => Ok(offset_date),
-            _ => Err(Error::InvalidFormat),
+            e => {
+                error!(
+                    "Failed to parse date {:?} from format {:?}\n{:?}",
+                    date_str, format, e
+                );
+                Err(Error::InvalidFormat)
+            }
         },
         Err(e) => {
-            error!("{:?}", e);
+            error!(
+                "Failed to parse date {:?} from format {:?}\n{:?}",
+                date_str, format, e
+            );
             Err(Error::InvalidFormat)
         }
     }
@@ -371,7 +388,7 @@ mod tests {
         assert!(match parse(&documents) {
             Ok(_) => false,
             Err(e) => match e {
-                crawler::Error::InvalidResponse => true,
+                Error::DeletedArticle => true,
                 _ => false,
             },
         });
@@ -389,7 +406,7 @@ mod tests {
         let documents = load_document("../tests/Soft_Job_M.1181801925.A.86E.html");
 
         assert_eq!(
-            parse_title(&documents),
+            parse_title(&documents).unwrap(),
             (Some("公告".to_owned()), "Soft_Job 板試閱".to_owned())
         );
     }
@@ -397,26 +414,35 @@ mod tests {
     #[test]
     fn test_parse_title_without_category() {
         let documents = load_document("../tests/Soft_Job_M.1181803258.A.666.html");
-        assert_eq!(parse_title(&documents), (None, "搶頭香".to_owned()));
+        assert_eq!(
+            parse_title(&documents).unwrap(),
+            (None, "搶頭香".to_owned())
+        );
     }
 
     #[test]
     fn test_parse_title_with_ascii_char() {
         let documents = load_document("../tests/Soft_Job_M.1181804025.A.7A7.html");
-        assert_eq!(parse_title(&documents), (None, "恭喜開板 ^^".to_owned()));
+        assert_eq!(
+            parse_title(&documents).unwrap(),
+            (None, "恭喜開板 ^^".to_owned())
+        );
     }
 
     #[test]
     fn test_parse_title_as_reply() {
         let documents = load_document("../tests/Soft_Job_M.1181804025.A.7A7.html");
-        assert_eq!(parse_title(&documents), (None, "恭喜開板 ^^".to_owned()));
+        assert_eq!(
+            parse_title(&documents).unwrap(),
+            (None, "恭喜開板 ^^".to_owned())
+        );
     }
 
     #[test]
     fn test_parse_title_not_in_html_meta() {
         let documents = load_document("../tests/Gossiping_M.1123769450.A.A1A.html");
         assert_eq!(
-            parse_title(&documents),
+            parse_title(&documents).unwrap(),
             (
                 Some("名人".to_owned()),
                 "有沒有人有希特勒的八卦阿".to_owned()
@@ -429,7 +455,7 @@ mod tests {
         let documents = load_document("../tests/Soft_Job_M.1181801925.A.86E.html");
 
         assert_eq!(
-            parse_author(&documents),
+            parse_author(&documents).unwrap(),
             ("Junchoon".to_owned(), Some("裘髯客".to_owned()))
         );
     }
@@ -439,7 +465,7 @@ mod tests {
         let documents = load_document("../tests/Soft_Job_M.1181803258.A.666.html");
 
         assert_eq!(
-            parse_author(&documents),
+            parse_author(&documents).unwrap(),
             ("eggimage".to_owned(), Some("雞蛋非人哉啊....".to_owned()))
         );
     }
@@ -448,21 +474,24 @@ mod tests {
     fn test_parse_author_not_in_html_meta() {
         let documents = load_document("../tests/Gossiping_M.1123769450.A.A1A.html");
 
-        assert_eq!(parse_author(&documents), ("MOTHERGOOSE".to_owned(), None));
+        assert_eq!(
+            parse_author(&documents).unwrap(),
+            ("MOTHERGOOSE".to_owned(), None)
+        );
     }
 
     #[test]
     fn test_parse_board() {
         let documents = load_document("../tests/Soft_Job_M.1181801925.A.86E.html");
 
-        assert_eq!(parse_board(&documents), BoardName::SoftJob);
+        assert_eq!(parse_board(&documents).unwrap(), BoardName::SoftJob);
     }
 
     #[test]
     fn test_parse_board_not_in_html_meta() {
         let documents = load_document("../tests/Gossiping_M.1123769450.A.A1A.html");
 
-        assert_eq!(parse_board(&documents), BoardName::Gossiping);
+        assert_eq!(parse_board(&documents).unwrap(), BoardName::Gossiping);
     }
 
     #[test]

@@ -43,7 +43,7 @@ pub fn crawl_url(client: &Client, url: &str) -> Result<Article, Error> {
     }
 
     let document = transform_to_document(client, url)?;
-    parser::parse(&document)
+    parser::parse(&document).map_err(|_| Error::InvalidResponse)
 }
 
 /// Given a board, crawls specified pages and parses them into Articles.
