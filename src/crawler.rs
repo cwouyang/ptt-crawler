@@ -1,5 +1,8 @@
+use std::ops::Range;
+
 use reqwest::{Client, RedirectPolicy};
 use select::document::Document;
+use select::predicate::Class;
 use url::Url;
 
 use crate::{article::Article, article::BoardName, parser};
@@ -15,41 +18,54 @@ pub enum Error {
 }
 
 /// Return a HTTP Client with cookie accepting over 18 agreement.
+/// One should reuse returned client as more as possible.
 pub fn create_client() -> Result<Client, Error> {
-    let client = match reqwest::Client::builder()
+    let client = reqwest::Client::builder()
         .cookie_store(true)
         .redirect(RedirectPolicy::none())
         .build()
-    {
-        Ok(c) => c,
-        Err(e) => return Err(Error::ConnectionError(e)),
-    };
+        .or_else(|e| Err(Error::ConnectionError(e)))?;
 
     let params = [("yes", "yes")];
     let url = format!("{}/ask/over18", PTT_CC_URL);
-    match client.post(&url).form(&params).send() {
-        Ok(_) => Ok(client),
-        Err(e) => return Err(Error::ConnectionError(e)),
-    }
+    client
+        .post(&url)
+        .form(&params)
+        .send()
+        .map(|_| Ok(client))
+        .or_else(|e| Err(Error::ConnectionError(e)))?
 }
 
-/// Given a URL, crawls the page and parses it into an Article
-pub fn crawl(client: &Client, url: &str) -> Result<Article, Error> {
+/// Given a URL, crawls the page and parses it into an Article.
+pub fn crawl_url(client: &Client, url: &str) -> Result<Article, Error> {
     if !is_supported_url(url) {
         return Err(Error::InvalidUrl);
     }
 
-    let document = match client.get(url).send() {
-        Ok(mut r) => {
-            if !r.status().is_success() {
-                return Err(Error::InvalidResponse);
-            }
-            let text = r.text().unwrap();
-            Document::from(text.as_str())
-        }
-        Err(e) => return Err(Error::ConnectionError(e)),
-    };
+    let document = transform_to_document(client, url)?;
     parser::parse(&document)
+}
+
+/// Given a board, crawls specified pages and parses them into Articles.
+pub fn crawl_pages(
+    client: &Client,
+    board: BoardName,
+    range: Range<u32>,
+) -> Result<Vec<Article>, Error> {
+    let mut articles: Vec<Article> = vec![];
+    for page in range {
+        let page_url = format!(
+            "{}/bbs/{}/index{}.html",
+            PTT_CC_URL,
+            board.to_string(),
+            page
+        );
+        match crawl_one_page(client, &page_url) {
+            Ok(mut a) => articles.append(&mut a),
+            Err(e) => error!("Error {:?} occurred when parsing {:?}", e, page_url),
+        };
+    }
+    Ok(articles)
 }
 
 fn is_supported_url(url: &str) -> bool {
@@ -74,6 +90,50 @@ fn is_supported_url(url: &str) -> bool {
         .fold(true, |ok, (segment, predicate)| ok && predicate(segment))
 }
 
+fn transform_to_document(client: &Client, url: &str) -> Result<Document, Error> {
+    match client.get(url).send() {
+        Ok(mut r) => {
+            if !r.status().is_success() {
+                return Err(Error::InvalidResponse);
+            }
+            let text = r.text().unwrap();
+            Ok(Document::from(text.as_str()))
+        }
+        Err(e) => Err(Error::ConnectionError(e)),
+    }
+}
+
+fn crawl_one_page(client: &Client, url: &str) -> Result<Vec<Article>, Error> {
+    info!("Start crawling page {}", url);
+    let document = transform_to_document(client, url)?;
+    let articles = document
+        .find(Class("title"))
+        .flat_map(|n| {
+            n.children().find(|n| {
+                let title = n.text();
+                n.name() == Some("a") && !title.trim().is_empty()
+            })
+        })
+        .map(|a| a.attr("href").unwrap().to_owned())
+        .filter_map(|relative_path| {
+            let article_url = format!("{}{}", PTT_CC_URL, relative_path);
+            info!("Start crawling article {}", article_url);
+            match crawl_url(client, &article_url) {
+                Ok(article) => {
+                    info!("Succeeded!");
+                    Some(article)
+                }
+                Err(e) => {
+                    error!("Failed! {:?}", e);
+                    None
+                }
+            }
+        })
+        .collect::<Vec<Article>>();
+    info!("Succeeded to crawl page");
+    Ok(articles)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -84,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_crawl_not_ptt_url() {
-        assert!(match crawl(&CLIENT, "https://www.google.com") {
+        assert!(match crawl_url(&CLIENT, "https://www.google.com") {
             Err(e) => match e {
                 Error::InvalidUrl => true,
                 _ => false,
@@ -95,7 +155,7 @@ mod tests {
 
     #[test]
     fn test_crawl_invalid_ptt_url() {
-        assert!(match crawl(&CLIENT, "https://www.ptt.cc") {
+        assert!(match crawl_url(&CLIENT, "https://www.ptt.cc") {
             Err(e) => match e {
                 Error::InvalidUrl => true,
                 _ => false,
@@ -107,7 +167,7 @@ mod tests {
     #[test]
     fn test_crawl_none_exist_ptt_url() {
         assert!(
-            match crawl(&CLIENT, "https://www.ptt.cc/bbs/Gossiping/M.html") {
+            match crawl_url(&CLIENT, "https://www.ptt.cc/bbs/Gossiping/M.html") {
                 Err(e) => match e {
                     Error::InvalidResponse => true,
                     _ => false,
