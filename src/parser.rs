@@ -309,7 +309,7 @@ fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
     }
 
     if node.text() == "檔案過大！部分文章無法顯示" {
-        error!("Invalid format of reply {:?}", node.text());
+        warn!("Invalid format of reply {:?}", node.text());
         return Err(Error::InvalidFormat);
     }
 
@@ -357,7 +357,7 @@ fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
             (ip, month, day, hour, min)
         }
         None => {
-            error!("Invalid format of reply {:?}", node.text());
+            warn!("Invalid format of reply {:?}", node.text());
             return Err(Error::InvalidFormat);
         }
     };
