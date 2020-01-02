@@ -241,13 +241,13 @@ fn parse_date_from_str(date_str: &str, format: &str) -> Result<DateTime<FixedOff
 
 fn parse_ip(document: &Document) -> Ipv4Addr {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r"(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})").unwrap();
+        static ref RE: Regex = Regex::new(r"(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap();
     }
 
     let str_contain_ip = match document
         .find(Name("span").and(Class("f2")))
         .map(|n| n.text())
-        .find(|s| (s.contains("來自:") || s.contains("From:")))
+        .find(|s| !s.contains("編輯") && (s.contains("來自:") || s.contains("From:")))
     {
         Some(ip) => ip.to_owned(),
         None => {
@@ -555,5 +555,11 @@ mod tests {
     fn test_parse_ip2() {
         let documents = load_document("../tests/Gossiping_M.1119222660.A.94E.html");
         assert_eq!(parse_ip(&documents), Ipv4Addr::new(138, 130, 212, 179));
+    }
+
+    #[test]
+    fn test_parse_ip3() {
+        let documents = load_document("../tests/Gossiping_M.1175469904.A.05B.html");
+        assert_eq!(parse_ip(&documents), Ipv4Addr::new(140, 118, 229, 94));
     }
 }
