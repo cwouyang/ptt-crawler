@@ -434,24 +434,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_title_with_ascii_char() {
-        let documents = load_document("../tests/Soft_Job_M.1181804025.A.7A7.html");
-        assert_eq!(
-            parse_title(&documents).unwrap(),
-            (None, "恭喜開板 ^^".to_owned())
-        );
-    }
-
-    #[test]
-    fn test_parse_title_as_reply() {
-        let documents = load_document("../tests/Soft_Job_M.1181804025.A.7A7.html");
-        assert_eq!(
-            parse_title(&documents).unwrap(),
-            (None, "恭喜開板 ^^".to_owned())
-        );
-    }
-
-    #[test]
     fn test_parse_title_not_in_html_meta() {
         let documents = load_document("../tests/Gossiping_M.1123769450.A.A1A.html");
         assert_eq!(
