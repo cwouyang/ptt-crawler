@@ -27,7 +27,7 @@ pub fn parse(document: &Document) -> Result<Article, Error> {
 
     let (id, category, title, author_id, author_name, board, date, ip) = parse_meta(&document)?;
     let content = parse_content(&document);
-    let replies = parse_replies(&document, &date);
+    let replies = parse_replies(&document, date);
 
     let reply_count = ReplyCount {
         push: replies
@@ -44,15 +44,15 @@ pub fn parse(document: &Document) -> Result<Article, Error> {
             .count() as u16,
     };
     return Ok(Article {
+        board,
         id,
         category,
         title,
         author_id,
         author_name,
-        content,
-        board,
         date,
         ip,
+        content,
         reply_count,
         replies,
     });
@@ -74,8 +74,8 @@ fn parse_meta(
         String,
         Option<String>,
         BoardName,
-        DateTime<FixedOffset>,
-        Ipv4Addr,
+        Option<DateTime<FixedOffset>>,
+        Option<Ipv4Addr>,
     ),
     Error,
 > {
@@ -87,8 +87,8 @@ fn parse_meta(
     };
     let (author_id, author_name) = parse_author(document)?;
     let board = parse_board(document)?;
-    let date = parse_date(document)?;
-    let ip = parse_ip(document);
+    let date = parse_date(document).ok();
+    let ip = parse_ip(document).ok();
 
     Ok((id, category, title, author_id, author_name, board, date, ip))
 }
@@ -268,7 +268,7 @@ fn parse_date_from_str(date_str: &str, format: &str) -> Result<DateTime<FixedOff
     }
 }
 
-fn parse_ip(document: &Document) -> Ipv4Addr {
+fn parse_ip(document: &Document) -> Result<Ipv4Addr, Error> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").unwrap();
     }
@@ -288,8 +288,11 @@ fn parse_ip(document: &Document) -> Ipv4Addr {
         }
     };
     match RE.captures(&str_contain_ip) {
-        Some(cap) => cap["ip"].parse::<Ipv4Addr>().unwrap(),
-        None => Ipv4Addr::new(0, 0, 0, 0),
+        Some(cap) => Ok(cap["ip"].parse::<Ipv4Addr>().unwrap()),
+        None => {
+            error!("IP field not found");
+            Err(Error::FieldNotFound("ip".to_owned()))
+        }
     }
 }
 
@@ -309,14 +312,14 @@ fn parse_content(document: &Document) -> String {
     content.trim().to_owned()
 }
 
-fn parse_replies(document: &Document, article_time: &DateTime<FixedOffset>) -> Vec<Reply> {
+fn parse_replies(document: &Document, article_time: Option<DateTime<FixedOffset>>) -> Vec<Reply> {
     document
         .find(Name("div").and(Class("push")))
-        .flat_map(|n| parse_reply(&n, article_time.year()))
+        .flat_map(|n| parse_reply(&n, article_time))
         .collect::<Vec<Reply>>()
 }
 
-fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
+fn parse_reply(node: &Node, article_time: Option<DateTime<FixedOffset>>) -> Result<Reply, Error> {
     lazy_static! {
         static ref RE: Regex = Regex::new(
             r"(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})?\s?(?P<month>\d{2})/(?P<day>\d{2})(\s*(?P<hour>\d{2}):(?P<min>\d{2}))?"
@@ -378,20 +381,22 @@ fn parse_reply(node: &Node, article_year: i32) -> Result<Reply, Error> {
         }
     };
 
-    let mut year = article_year;
-    if month == 2 && day == 29 {
-        while !is_leap_year(year) {
-            year += 1;
+    let date = article_time.map(|t| {
+        let mut year = t.year();
+        if month == 2 && day == 29 {
+            while !is_leap_year(year) {
+                year += 1;
+            }
         }
-    }
-    let date = TW_TIME_OFFSET.ymd(year, month, day).and_hms(hour, min, 0);
+        TW_TIME_OFFSET.ymd(year, month, day).and_hms(hour, min, 0)
+    });
 
     Ok(Reply {
         author_id,
         reply_type,
-        content,
         ip,
         date,
+        content,
     })
 }
 
@@ -556,49 +561,64 @@ mod tests {
     #[test]
     fn test_parse_replies() {
         let documents = load_document("../tests/Soft_Job_M.1181801925.A.86E.html");
-        let article_date = FixedOffset::east(8 * 3600)
-            .ymd(2007, 6, 14)
-            .and_hms(14, 18, 43);
+        let article_date = Some(
+            FixedOffset::east(8 * 3600)
+                .ymd(2007, 6, 14)
+                .and_hms(14, 18, 43),
+        );
 
-        assert_eq!(parse_replies(&documents, &article_date).len(), 5)
+        assert_eq!(parse_replies(&documents, article_date).len(), 5)
     }
 
     #[test]
     fn test_parse_replies_with_warning_message() {
         // contains "檔案過大！部分文章無法顯示"
         let documents = load_document("../tests/Gossiping_M.1119222611.A.7A9.html");
-        let article_date = FixedOffset::east(8 * 3600)
-            .ymd(2005, 6, 20)
-            .and_hms(7, 11, 31);
+        let article_date = Some(
+            FixedOffset::east(8 * 3600)
+                .ymd(2005, 6, 20)
+                .and_hms(7, 11, 31),
+        );
 
-        assert_eq!(parse_replies(&documents, &article_date).len(), 1491)
+        assert_eq!(parse_replies(&documents, article_date).len(), 1491)
     }
 
     #[test]
     fn test_parse_article_without_reply() {
         let documents = load_document("../tests/Soft_Job_M.1181804025.A.7A7.html");
-        let article_date = FixedOffset::east(8 * 3600)
-            .ymd(2007, 6, 14)
-            .and_hms(14, 53, 44);
+        let article_date = Some(
+            FixedOffset::east(8 * 3600)
+                .ymd(2007, 6, 14)
+                .and_hms(14, 53, 44),
+        );
 
-        assert_eq!(parse_replies(&documents, &article_date).len(), 0)
+        assert_eq!(parse_replies(&documents, article_date).len(), 0)
     }
 
     #[test]
     fn test_parse_ip() {
         let documents = load_document("../tests/Soft_Job_M.1181801925.A.86E.html");
-        assert_eq!(parse_ip(&documents), Ipv4Addr::new(125, 232, 236, 105));
+        assert_eq!(
+            parse_ip(&documents).unwrap(),
+            Ipv4Addr::new(125, 232, 236, 105)
+        );
     }
 
     #[test]
     fn test_parse_ip2() {
         let documents = load_document("../tests/Gossiping_M.1119222660.A.94E.html");
-        assert_eq!(parse_ip(&documents), Ipv4Addr::new(138, 130, 212, 179));
+        assert_eq!(
+            parse_ip(&documents).unwrap(),
+            Ipv4Addr::new(138, 130, 212, 179)
+        );
     }
 
     #[test]
     fn test_parse_ip3() {
         let documents = load_document("../tests/Gossiping_M.1175469904.A.05B.html");
-        assert_eq!(parse_ip(&documents), Ipv4Addr::new(140, 118, 229, 94));
+        assert_eq!(
+            parse_ip(&documents).unwrap(),
+            Ipv4Addr::new(140, 118, 229, 94)
+        );
     }
 }

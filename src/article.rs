@@ -5,15 +5,15 @@ use chrono::{prelude::*, DateTime};
 /// Article stores the parsed result of an article
 #[derive(Deserialize, Clone, Debug)]
 pub struct Article {
+    pub board: BoardName,
     pub id: String,
     pub category: String,
     pub title: String,
     pub author_id: String,
     pub author_name: Option<String>,
-    pub board: BoardName,
+    pub date: Option<DateTime<FixedOffset>>,
+    pub ip: Option<Ipv4Addr>,
     pub content: String,
-    pub date: DateTime<FixedOffset>,
-    pub ip: Ipv4Addr,
     pub reply_count: ReplyCount,
     pub replies: Vec<Reply>,
 }
@@ -29,11 +29,11 @@ pub struct ReplyCount {
 /// Reply represents a reply.
 #[derive(Deserialize, Clone, Debug)]
 pub struct Reply {
-    pub author_id: String,
-    pub content: String,
-    pub ip: Option<Ipv4Addr>,
-    pub date: DateTime<FixedOffset>,
     pub reply_type: ReplyType,
+    pub author_id: String,
+    pub ip: Option<Ipv4Addr>,
+    pub date: Option<DateTime<FixedOffset>>,
+    pub content: String,
 }
 
 /// ReplyType represents the type of a reply.
