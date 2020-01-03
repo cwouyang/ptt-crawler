@@ -87,7 +87,7 @@ fn parse_meta(
     };
     let (author_id, author_name) = parse_author(document)?;
     let board = parse_board(document)?;
-    let date = parse_date(document).unwrap();
+    let date = parse_date(document)?;
     let ip = parse_ip(document);
 
     Ok((id, category, title, author_id, author_name, board, date, ip))
@@ -235,7 +235,10 @@ fn parse_date(document: &Document) -> Result<DateTime<FixedOffset>, Error> {
             let main_content = get_main_content(document);
             match RE.captures(&main_content) {
                 Some(cap) => cap["date"].to_owned(),
-                None => return Err(Error::FieldNotFound("date".to_owned())),
+                None => {
+                    error!("Date field not found");
+                    return Err(Error::FieldNotFound("date".to_owned()));
+                }
             }
         }
     };
