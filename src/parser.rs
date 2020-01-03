@@ -171,11 +171,24 @@ fn parse_author(document: &Document) -> Result<(String, Option<String>), Error> 
                 let text = n.text();
                 text.trim().eq("作者")
             });
-            if author_node.is_none() {
-                error!("Author field not found");
-                return Err(Error::FieldNotFound("author".to_owned()));
+            if author_node.is_some() {
+                author_node.unwrap().next().unwrap().text().to_owned()
+            } else {
+                let main_content = get_main_content(document);
+                match main_content.find("作者:") {
+                    Some(mut author_start_index) => {
+                        let author = main_content[author_start_index..].to_owned();
+                        let author_colon_index = author.find(':').unwrap();
+                        let author_end_index = author.find('\n').unwrap();
+                        author_start_index = author_colon_index + 1;
+                        author[author_start_index..author_end_index].to_owned()
+                    }
+                    None => {
+                        error!("Author field not found");
+                        return Err(Error::FieldNotFound("author".to_owned()));
+                    }
+                }
             }
-            author_node.unwrap().next().unwrap().text().to_owned()
         }
     };
     let trim_author = author.trim();
@@ -485,6 +498,15 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_author_within_content() {
+        let documents = load_document("../tests/Gossiping_M.1173456473.A.F4F.html");
+        assert_eq!(
+            parse_author(&documents).unwrap(),
+            ("julysecond".to_owned(), Some("還是台灣好".to_owned()))
+        );
+    }
+
+    #[test]
     fn test_parse_board() {
         let documents = load_document("../tests/Soft_Job_M.1181801925.A.86E.html");
 
@@ -514,6 +536,16 @@ mod tests {
         let article_date = FixedOffset::east(8 * 3600)
             .ymd(2007, 6, 14)
             .and_hms(20, 27, 24);
+
+        assert_eq!(parse_date(&documents).unwrap(), article_date);
+    }
+
+    #[test]
+    fn test_parse_date_within_content() {
+        let documents = load_document("../tests/Gossiping_M.1173456473.A.F4F.html");
+        let article_date = FixedOffset::east(8 * 3600)
+            .ymd(2007, 3, 10)
+            .and_hms(00, 07, 48);
 
         assert_eq!(parse_date(&documents).unwrap(), article_date);
     }
