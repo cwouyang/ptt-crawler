@@ -43,7 +43,7 @@ pub fn parse(document: &Document) -> Result<Article, Error> {
             .filter(|r| r.reply_type == ReplyType::Boo)
             .count() as u16,
     };
-    return Ok(Article {
+    Ok(Article {
         board,
         id,
         category,
@@ -55,7 +55,7 @@ pub fn parse(document: &Document) -> Result<Article, Error> {
         content,
         reply_count,
         replies,
-    });
+    })
 }
 
 fn is_article_exist(document: &Document) -> bool {
@@ -401,7 +401,7 @@ fn parse_reply(node: &Node, article_time: Option<DateTime<FixedOffset>>) -> Resu
 }
 
 fn is_leap_year(year: i32) -> bool {
-    return (year % 4 == 0) && (year % 100 != 0 || year % 400 == 0);
+    (year % 4 == 0) && (year % 100 != 0 || year % 400 == 0)
 }
 
 #[cfg(test)]
