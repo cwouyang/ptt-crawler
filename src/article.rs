@@ -2,9 +2,9 @@ use std::net::Ipv4Addr;
 
 use chrono::{prelude::*, DateTime};
 
-/// Article stores the parsed result of an article
+/// Meta stores the parsed result of an article meta.
 #[derive(Deserialize, Clone, Debug)]
-pub struct Article {
+pub struct Meta {
     pub board: BoardName,
     pub id: String,
     pub category: String,
@@ -13,6 +13,12 @@ pub struct Article {
     pub author_name: Option<String>,
     pub date: Option<DateTime<FixedOffset>>,
     pub ip: Option<Ipv4Addr>,
+}
+
+/// Article stores the parsed result of an article.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Article {
+    pub meta: Meta,
     pub content: String,
     pub reply_count: ReplyCount,
     pub replies: Vec<Reply>,

@@ -5,7 +5,7 @@ use regex::Regex;
 use select::predicate::{Attr, Class, Name, Predicate};
 use select::{document::Document, node::Node};
 
-use crate::article::{Article, BoardName, Reply, ReplyCount, ReplyType};
+use crate::article::{Article, BoardName, Meta, Reply, ReplyCount, ReplyType};
 
 lazy_static! {
     static ref TW_TIME_OFFSET: FixedOffset = FixedOffset::east(8 * 3600);
@@ -25,9 +25,9 @@ pub fn parse(document: &Document) -> Result<Article, Error> {
         return Err(Error::DeletedArticle);
     }
 
-    let (id, category, title, author_id, author_name, board, date, ip) = parse_meta(&document)?;
+    let meta = parse_meta(&document)?;
     let content = parse_content(&document);
-    let replies = parse_replies(&document, date);
+    let replies = parse_replies(&document, meta.date);
 
     let reply_count = ReplyCount {
         push: replies
@@ -44,14 +44,7 @@ pub fn parse(document: &Document) -> Result<Article, Error> {
             .count() as u16,
     };
     Ok(Article {
-        board,
-        id,
-        category,
-        title,
-        author_id,
-        author_name,
-        date,
-        ip,
+        meta,
         content,
         reply_count,
         replies,
@@ -64,21 +57,7 @@ fn is_article_exist(document: &Document) -> bool {
         .any(|n: Node| n.text().contains("404 - Not Found."))
 }
 
-fn parse_meta(
-    document: &Document,
-) -> Result<
-    (
-        String,
-        String,
-        String,
-        String,
-        Option<String>,
-        BoardName,
-        Option<DateTime<FixedOffset>>,
-        Option<Ipv4Addr>,
-    ),
-    Error,
-> {
+fn parse_meta(document: &Document) -> Result<Meta, Error> {
     let id = parse_id(document);
     let (category, title) = match parse_title(document) {
         Ok((Some(category), title)) => (category, title),
@@ -90,7 +69,16 @@ fn parse_meta(
     let date = parse_date(document).ok();
     let ip = parse_ip(document).ok();
 
-    Ok((id, category, title, author_id, author_name, board, date, ip))
+    Ok(Meta {
+        id,
+        category,
+        title,
+        author_id,
+        author_name,
+        board,
+        date,
+        ip,
+    })
 }
 
 fn parse_id(document: &Document) -> String {
