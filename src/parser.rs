@@ -88,7 +88,7 @@ fn parse_id(document: &Document) -> String {
         .unwrap()
         .attr("href")
         .unwrap();
-    let split_url = url.split("/").collect::<Vec<_>>();
+    let split_url = url.split('/').collect::<Vec<_>>();
     let mut id = split_url.last().unwrap().to_owned();
     let html_extension_index: usize = id.find(".html").unwrap();
     id = &id[..html_extension_index];
@@ -111,8 +111,8 @@ fn parse_title(document: &Document) -> Result<(Option<String>, String), Error> {
                 let text = n.text();
                 text.trim().eq("標題")
             });
-            if title_node.is_some() {
-                title_node.unwrap().next().unwrap().text().to_owned()
+            if let Some(n) = title_node {
+                n.next().unwrap().text().to_owned()
             } else {
                 let main_content = get_main_content(document);
                 match main_content.find("標題:") {
@@ -159,8 +159,8 @@ fn parse_author(document: &Document) -> Result<(String, Option<String>), Error> 
                 let text = n.text();
                 text.trim().eq("作者")
             });
-            if author_node.is_some() {
-                author_node.unwrap().next().unwrap().text().to_owned()
+            if let Some(n) = author_node {
+                n.next().unwrap().text().to_owned()
             } else {
                 let main_content = get_main_content(document);
                 match main_content.find("作者:") {

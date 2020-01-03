@@ -6,7 +6,6 @@ extern crate lazy_static;
 extern crate load_file;
 #[macro_use]
 extern crate log;
-extern crate pretty_env_logger;
 extern crate regex;
 extern crate reqwest;
 extern crate select;
