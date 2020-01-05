@@ -54,12 +54,7 @@ pub fn crawl_pages(
 ) -> Result<Vec<Article>, Error> {
     let mut articles: Vec<Article> = vec![];
     for page in range {
-        let page_url = format!(
-            "{}/bbs/{}/index{}.html",
-            PTT_CC_URL,
-            board.to_string(),
-            page
-        );
+        let page_url = compose_page_url(&board, page);
         match crawl_one_page(client, &page_url) {
             Ok(mut a) => articles.append(&mut a),
             Err(e) => error!("Error {:?} occurred when parsing {:?}", e, page_url),
@@ -101,6 +96,15 @@ fn transform_to_document(client: &Client, url: &str) -> Result<Document, Error> 
         }
         Err(e) => Err(Error::ConnectionError(e)),
     }
+}
+
+fn compose_page_url(board: &BoardName, page: u32) -> String {
+    format!(
+        "{}/bbs/{}/index{}.html",
+        PTT_CC_URL,
+        board.to_string(),
+        page
+    )
 }
 
 fn crawl_one_page(client: &Client, url: &str) -> Result<Vec<Article>, Error> {
