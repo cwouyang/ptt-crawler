@@ -1,9 +1,10 @@
 use std::net::Ipv4Addr;
 
 use chrono::{prelude::*, DateTime};
+use enum_iterator::IntoEnumIterator;
 
 /// Meta stores the parsed result of an article meta.
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Meta {
     pub board: BoardName,
     pub id: String,
@@ -16,7 +17,7 @@ pub struct Meta {
 }
 
 /// Article stores the parsed result of an article.
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Article {
     pub meta: Meta,
     pub content: String,
@@ -25,7 +26,7 @@ pub struct Article {
 }
 
 /// ReplyCount represents the number info about an article.
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct ReplyCount {
     pub push: u16,
     pub neutral: u16,
@@ -33,7 +34,7 @@ pub struct ReplyCount {
 }
 
 /// Reply represents a reply.
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Reply {
     pub reply_type: ReplyType,
     pub author_id: String,
@@ -43,7 +44,7 @@ pub struct Reply {
 }
 
 /// ReplyType represents the type of a reply.
-#[derive(Deserialize, Clone, Debug, EnumString, PartialEq)]
+#[derive(Serialize, Clone, Debug, EnumString, PartialEq)]
 pub enum ReplyType {
     #[strum(serialize = "推")]
     Push,
@@ -55,7 +56,7 @@ pub enum ReplyType {
 
 /// BoardName represents the name of a board.
 /// Most of them are extracted from https://www.ptt.cc/bbs/hotboards.html
-#[derive(Deserialize, Clone, Debug, EnumString, Display, PartialEq)]
+#[derive(Serialize, Clone, Debug, EnumString, Display, PartialEq, IntoEnumIterator)]
 pub enum BoardName {
     AllTogether,
     #[strum(serialize = "Bank_Service")]

@@ -15,23 +15,25 @@ name = "pttcrawler"
 path = "src/lib.rs"
 
 [[bin]]
-name = "pttcrawler"
+name = "ptc"
 path = "src/main.rs"
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 serde = "1.0.27"
-serde_derive = "1.0.27"
-serde_json = "1.0.9"
+serde_derive = "1.0.104"
+serde_json = "1.0.44"
 reqwest = "0.9.24"
 url = "2.1.0"
 select = "0.4.3"
 strum = "0.17.1"
 strum_macros = "0.17.1"
+structopt = "0.3.7"
 regex = "1"
 lazy_static = "1.4.0"
 log = "0.4.8"
 pretty_env_logger = "0.3.1"
+enum-iterator = "0.5.0"
 
 [dev-dependencies]
 load_file = "1.0.0"

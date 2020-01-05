@@ -1,4 +1,5 @@
 extern crate chrono;
+extern crate enum_iterator;
 #[macro_use]
 extern crate lazy_static;
 #[cfg(test)]
