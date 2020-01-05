@@ -1,8 +1,9 @@
 use std::ops::Range;
 
+use regex::Regex;
 use reqwest::{Client, RedirectPolicy};
 use select::document::Document;
-use select::predicate::Class;
+use select::predicate::{Class, Name, Predicate};
 use url::Url;
 
 use crate::{article::Article, article::BoardName, parser};
@@ -34,6 +35,32 @@ pub fn create_client() -> Result<Client, Error> {
         .send()
         .map(|_| Ok(client))
         .or_else(|e| Err(Error::ConnectionError(e)))?
+}
+
+/// Crawl the page count of given board.
+pub fn crawl_page_count(client: &Client, board: &BoardName) -> Result<u32, Error> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r"index(?P<num>\d+)").unwrap();
+    }
+
+    let latest_page_url = compose_page_url(&board, 0);
+    let document = transform_to_document(&client, &latest_page_url)?;
+    let last_page_url = match document
+        .find(Name("a").and(Class("wide")))
+        .find(|n| n.text() == "‹ 上頁")
+    {
+        Some(n) => n.attr("href").unwrap(),
+        None => return Ok(1),
+    };
+    let count_until_last_page = RE
+        .captures(last_page_url)
+        .unwrap()
+        .name("num")
+        .unwrap()
+        .as_str()
+        .parse::<u32>()
+        .unwrap();
+    Ok(count_until_last_page + 1)
 }
 
 /// Given a URL, crawls the page and parses it into an Article.
