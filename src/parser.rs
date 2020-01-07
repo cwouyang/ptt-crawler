@@ -112,7 +112,7 @@ fn parse_title(document: &Document) -> Result<(Option<String>, String), Error> {
                 text.trim().eq("標題")
             });
             if let Some(n) = title_node {
-                n.next().unwrap().text().to_owned()
+                n.next().unwrap().text()
             } else {
                 let main_content = get_main_content(document);
                 match main_content.find("標題:") {
@@ -160,7 +160,7 @@ fn parse_author(document: &Document) -> Result<(String, Option<String>), Error> 
                 text.trim().eq("作者")
             });
             if let Some(n) = author_node {
-                n.next().unwrap().text().to_owned()
+                n.next().unwrap().text()
             } else {
                 let main_content = get_main_content(document);
                 match main_content.find("作者:") {
@@ -201,7 +201,7 @@ fn parse_board(document: &Document) -> Result<BoardName, Error> {
                 error!("Board field not found");
                 return Err(Error::FieldNotFound("board".to_owned()));
             }
-            board_node.unwrap().next().unwrap().text().to_owned()
+            board_node.unwrap().next().unwrap().text()
         }
     };
     Ok(board.parse::<BoardName>().unwrap_or(BoardName::Unknown))
@@ -266,7 +266,7 @@ fn parse_ip(document: &Document) -> Result<Ipv4Addr, Error> {
         .map(|n| n.text())
         .find(|s| !s.contains("編輯") && (s.contains("來自:") || s.contains("From:")))
     {
-        Some(ip) => ip.to_owned(),
+        Some(ip) => ip,
         None => {
             let main_content = get_main_content(document);
             let sub_content_start_index = main_content

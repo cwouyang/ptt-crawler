@@ -5,7 +5,7 @@ extern crate pttcrawler;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
-use std::ops::Range;
+use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::process;
 
@@ -57,7 +57,8 @@ enum SubCommand {
     },
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let opt = Opt::from_args();
 
     if opt.debug {
@@ -71,13 +72,14 @@ fn main() {
             let url_string = url.into_os_string().into_string().unwrap();
 
             println!("Start crawling URL \"{}\"", url_string);
-            let client = create_client();
-            json_output = crawler::crawl_url(&client, &url_string)
-                .map(|article| serde_json::to_string_pretty(&article).unwrap())
-                .unwrap_or_else(|e| {
+            let client = create_client().await;
+            json_output = match crawler::crawl_url(&client, &url_string).await {
+                Ok(article) => serde_json::to_string_pretty(&article).unwrap(),
+                Err(e) => {
                     eprintln!("Error: Failed to crawl with error {:?}", e);
                     process::exit(1)
-                });
+                }
+            };
         }
         SubCommand::Board {
             show_list,
@@ -99,19 +101,22 @@ fn main() {
                 );
                 process::exit(1);
             });
-            let client = create_client();
-            let range = get_board_range(&client, &board, range);
+            let client = create_client().await;
+            let range = get_board_range(&client, &board, range).await;
 
             println!(
                 "Start crawling board \"{}\" from page {} to {}",
-                board, range.start, range.end
+                board,
+                range.start(),
+                range.end()
             );
-            json_output = crawler::crawl_pages(&client, board, range)
-                .map(|articles| serde_json::to_string_pretty(&articles).unwrap())
-                .unwrap_or_else(|e| {
+            json_output = match crawler::crawl_pages(&client, board, range).await {
+                Ok(articles) => serde_json::to_string_pretty(&articles).unwrap(),
+                Err(e) => {
                     eprintln!("Error: Failed to crawl with error {:?}", e);
                     process::exit(1);
-                });
+                }
+            };
         }
     }
 
@@ -139,35 +144,38 @@ fn main() {
     }
 }
 
-fn create_client() -> Client {
-    let client = match crawler::create_client() {
+async fn create_client() -> Client {
+    match crawler::create_client().await {
         Ok(client) => client,
         Err(e) => {
             eprintln!("Error: Failed to create client ({:#?})", e);
             process::exit(1);
         }
-    };
-    client
+    }
 }
 
-fn get_board_range(client: &Client, board: &BoardName, range: Option<Vec<u32>>) -> Range<u32> {
+async fn get_board_range(
+    client: &Client,
+    board: &BoardName,
+    range: Option<Vec<u32>>,
+) -> RangeInclusive<u32> {
     match range {
         Some(mut r) => {
             if r.len() == 1 {
-                match crawler::crawl_page_count(&client, &board) {
-                    Ok(page_count) => r.push(page_count + 1),
-                    Err(_) => r.push(r[0] + 1),
+                match crawler::crawl_page_count(&client, &board).await {
+                    Ok(page_count) => r.push(page_count),
+                    Err(_) => r.push(r[0]),
                 };
             }
             // make sure the range is increasing
             if r[0] > r[1] {
                 r.swap(0, 1);
             }
-            r[0]..r[1]
+            r[0]..=r[1]
         }
-        None => match crawler::crawl_page_count(&client, &board) {
-            Ok(page_count) => 1..(page_count + 1),
-            Err(_) => 1..2,
+        None => match crawler::crawl_page_count(&client, &board).await {
+            Ok(page_count) => 1..=page_count,
+            Err(_) => 1..=1,
         },
     }
 }
