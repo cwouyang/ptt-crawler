@@ -28,9 +28,9 @@ pub struct Article {
 /// ReplyCount represents the number info about an article.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ReplyCount {
-    pub push: u16,
-    pub neutral: u16,
-    pub boo: u16,
+    pub push: i16,
+    pub neutral: i16,
+    pub boo: i16,
 }
 
 /// Reply represents a reply.

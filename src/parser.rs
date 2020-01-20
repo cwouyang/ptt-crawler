@@ -33,15 +33,15 @@ pub fn parse(document: &Document) -> Result<Article, Error> {
         push: replies
             .iter()
             .filter(|r| r.reply_type == ReplyType::Push)
-            .count() as u16,
+            .count() as i16,
         neutral: replies
             .iter()
             .filter(|r| r.reply_type == ReplyType::Neutral)
-            .count() as u16,
+            .count() as i16,
         boo: replies
             .iter()
             .filter(|r| r.reply_type == ReplyType::Boo)
-            .count() as u16,
+            .count() as i16,
     };
     Ok(Article {
         meta,
