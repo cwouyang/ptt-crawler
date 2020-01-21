@@ -73,7 +73,7 @@ async fn main() {
     if let Some(proxy_string) = opt.proxy {
         let proxy = reqwest::Proxy::https(&proxy_string.into_os_string().into_string().unwrap())
             .unwrap_or_else(|e| {
-                eprintln!("Invalid format of proxy {:?}", e);
+                eprintln!("Error: Invalid format of proxy\n{:#?}", e);
                 process::exit(1);
             });
         proxies = Some(vec![proxy])
@@ -89,7 +89,7 @@ async fn main() {
             json_output = match crawler::crawl_url(&client, &url_string).await {
                 Ok(article) => serde_json::to_string_pretty(&article).unwrap(),
                 Err(e) => {
-                    eprintln!("Error: Failed to crawl with error {:?}", e);
+                    eprintln!("Error: Failed to crawl with error\n{:#?}", e);
                     process::exit(1)
                 }
             };
@@ -126,7 +126,7 @@ async fn main() {
             json_output = match crawler::crawl_pages(&client, board, range).await {
                 Ok(articles) => serde_json::to_string_pretty(&articles).unwrap(),
                 Err(e) => {
-                    eprintln!("Error: Failed to crawl with error {:?}", e);
+                    eprintln!("Error: Failed to crawl with error\n{:#?}", e);
                     process::exit(1);
                 }
             };
@@ -149,7 +149,7 @@ async fn main() {
             File::create(alt_output).unwrap()
         });
         file.write_all(json_output.as_bytes()).unwrap_or_else(|e| {
-            eprintln!("Error: Failed to write results with error {:?}", e);
+            eprintln!("Error: Failed to write results with error\n{:#?}", e);
             process::exit(1)
         });
     } else {
@@ -161,7 +161,7 @@ async fn create_client(proxies: Option<Vec<Proxy>>) -> Client {
     match crawler::create_client(proxies).await {
         Ok(client) => client,
         Err(e) => {
-            eprintln!("Error: Failed to create client ({:#?})", e);
+            eprintln!("Error: Failed to create client\n({:#?})", e);
             process::exit(1);
         }
     }
