@@ -2,7 +2,7 @@ use std::boxed::Box;
 use std::ops::RangeInclusive;
 
 use regex::Regex;
-use reqwest::{redirect::Policy, Client};
+use reqwest::{redirect::Policy, Client, Proxy};
 use select::document::Document;
 use select::predicate::{Class, Name, Predicate};
 use url::Url;
@@ -21,10 +21,16 @@ pub enum Error {
 
 /// Return a HTTP Client with cookie accepting over 18 agreement.
 /// One should reuse returned client as more as possible.
-pub async fn create_client() -> Result<Client, Error> {
-    let client = reqwest::Client::builder()
+pub async fn create_client(proxies: Option<Vec<Proxy>>) -> Result<Client, Error> {
+    let mut builder = reqwest::Client::builder()
         .cookie_store(true)
-        .redirect(Policy::none())
+        .redirect(Policy::none());
+    if let Some(mut proxy) = proxies {
+        while !proxy.is_empty() {
+            builder = builder.proxy(proxy.pop().unwrap())
+        }
+    }
+    let client = builder
         .build()
         .or_else(|e| Err(Error::ConnectionError(e)))?;
 
@@ -183,7 +189,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_crawl_not_ptt_url() {
-        let client = create_client().await.unwrap();
+        let client = create_client(None).await.unwrap();
 
         assert!(match crawl_url(&client, "https://www.google.com").await {
             Err(e) => match e {
@@ -196,7 +202,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_crawl_invalid_ptt_url() {
-        let client = create_client().await.unwrap();
+        let client = create_client(None).await.unwrap();
 
         assert!(match crawl_url(&client, "https://www.ptt.cc").await {
             Err(e) => match e {
@@ -209,7 +215,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_crawl_none_exist_ptt_url() {
-        let client = create_client().await.unwrap();
+        let client = create_client(None).await.unwrap();
 
         assert!(
             match crawl_url(&client, "https://www.ptt.cc/bbs/Gossiping/M.html").await {

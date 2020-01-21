@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::process;
 
 use enum_iterator::IntoEnumIterator;
-use reqwest::Client;
+use reqwest::{Client, Proxy};
 use structopt::StructOpt;
 
 use pttcrawler::article::BoardName;
@@ -30,6 +30,9 @@ struct Opt {
     /// Outputs results to file in JSON format
     #[structopt(short, long, parse(from_os_str))]
     output: Option<PathBuf>,
+    /// Proxy URL that crawler should pass requests to
+    #[structopt(short, long, parse(from_os_str))]
+    proxy: Option<PathBuf>,
 
     #[structopt(subcommand)]
     cmd: SubCommand,
@@ -66,13 +69,23 @@ async fn main() {
         pretty_env_logger::init();
     }
 
+    let mut proxies: Option<Vec<Proxy>> = None;
+    if let Some(proxy_string) = opt.proxy {
+        let proxy = reqwest::Proxy::https(&proxy_string.into_os_string().into_string().unwrap())
+            .unwrap_or_else(|e| {
+                eprintln!("Invalid format of proxy {:?}", e);
+                process::exit(1);
+            });
+        proxies = Some(vec![proxy])
+    }
+
     let json_output: String;
     match opt.cmd {
         SubCommand::Url { url } => {
             let url_string = url.into_os_string().into_string().unwrap();
 
             println!("Start crawling URL \"{}\"", url_string);
-            let client = create_client().await;
+            let client = create_client(proxies).await;
             json_output = match crawler::crawl_url(&client, &url_string).await {
                 Ok(article) => serde_json::to_string_pretty(&article).unwrap(),
                 Err(e) => {
@@ -101,7 +114,7 @@ async fn main() {
                 );
                 process::exit(1);
             });
-            let client = create_client().await;
+            let client = create_client(proxies).await;
             let range = get_board_range(&client, &board, range).await;
 
             println!(
@@ -144,8 +157,8 @@ async fn main() {
     }
 }
 
-async fn create_client() -> Client {
-    match crawler::create_client().await {
+async fn create_client(proxies: Option<Vec<Proxy>>) -> Client {
+    match crawler::create_client(proxies).await {
         Ok(client) => client,
         Err(e) => {
             eprintln!("Error: Failed to create client ({:#?})", e);
