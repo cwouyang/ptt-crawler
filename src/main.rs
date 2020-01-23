@@ -123,7 +123,7 @@ async fn main() {
                 range.start(),
                 range.end()
             );
-            json_output = match crawler::crawl_pages(&client, board, range).await {
+            json_output = match crawler::crawl_page_articles(&client, &board, range).await {
                 Ok(articles) => serde_json::to_string_pretty(&articles).unwrap(),
                 Err(e) => {
                     eprintln!("Error: Failed to crawl with error\n{:#?}", e);
