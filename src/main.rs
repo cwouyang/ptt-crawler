@@ -115,7 +115,18 @@ async fn main() {
                 process::exit(1);
             });
             let client = create_client(proxies).await;
-            let range = get_board_range(&client, &board, range).await;
+            let page_count = crawler::crawl_page_count(&client, &board)
+                .await
+                .unwrap_or(0);
+            let range = adjust_board_range(page_count, range)
+                .await
+                .unwrap_or_else(|_| {
+                    eprintln!(
+                        "Error: Invalid page range. Should between 1 and {}",
+                        page_count
+                    );
+                    process::exit(1);
+                });
 
             println!(
                 "Start crawling board \"{}\" from page {} to {}",
@@ -167,28 +178,24 @@ async fn create_client(proxies: Option<Vec<Proxy>>) -> Client {
     }
 }
 
-async fn get_board_range(
-    client: &Client,
-    board: &BoardName,
+async fn adjust_board_range(
+    page_count: u32,
     range: Option<Vec<u32>>,
-) -> RangeInclusive<u32> {
+) -> Result<RangeInclusive<u32>, ()> {
     match range {
         Some(mut r) => {
             if r.len() == 1 {
-                match crawler::crawl_page_count(&client, &board).await {
-                    Ok(page_count) => r.push(page_count),
-                    Err(_) => r.push(r[0]),
-                };
+                r.push(page_count);
             }
             // make sure the range is increasing
             if r[0] > r[1] {
                 r.swap(0, 1);
             }
-            r[0]..=r[1]
+            if r[1] > page_count {
+                return Err(());
+            }
+            Ok(r[0]..=r[1])
         }
-        None => match crawler::crawl_page_count(&client, &board).await {
-            Ok(page_count) => 1..=page_count,
-            Err(_) => 1..=1,
-        },
+        None => Ok(1..=page_count),
     }
 }
