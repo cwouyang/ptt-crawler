@@ -48,6 +48,7 @@ pub async fn crawl_page_count(client: &Client, board: &BoardName) -> Result<u32,
         static ref RE: Regex = Regex::new(r"index(?P<num>\d+)").unwrap();
     }
 
+    info!("Start crawling page count of board {}", board);
     let latest_page_url = compose_page_url(&board, 0);
     let document = transform_to_document(client, &latest_page_url).await?;
     let last_page_url = match document
@@ -65,38 +66,59 @@ pub async fn crawl_page_count(client: &Client, board: &BoardName) -> Result<u32,
         .as_str()
         .parse::<u32>()
         .unwrap();
-    Ok(count_until_last_page + 1)
+    let page_count = count_until_last_page + 1;
+    info!(
+        "Finish crawling page count of board {}. page_count: {}",
+        board, page_count
+    );
+    Ok(page_count)
 }
 
 /// Given a URL, crawls the page and parses it into an Article.
 pub async fn crawl_url(client: &Client, url: &str) -> Result<Article, Error> {
+    info!("Start crawling article with URL {}", url);
     if !is_supported_url(url) {
+        error!("not supported URL {}", url);
         return Err(Error::InvalidUrl);
     }
 
     let document = transform_to_document(client, url).await?;
-    parser::parse(&document).map_err(|_| Error::InvalidResponse)
+    let result = parser::parse(&document).map_err(|_| Error::InvalidResponse);
+    info!("Finish crawling article with URL {}", url);
+    result
 }
 
 /// Given a board, crawls and returns the URLs of articles within range.
 pub async fn crawl_page_urls(
     client: &Client,
     board: &BoardName,
-    range: RangeInclusive<u32>,
+    range: &RangeInclusive<u32>,
 ) -> Result<Vec<String>, Error> {
+    info!(
+        "Start crawling URLs of articles from board {} page {} to {}",
+        board,
+        range.start(),
+        range.end()
+    );
     let mut article_urls: Vec<String> = vec![];
     let mut error: Error = Error::InvalidResponse;
-    for page in range {
-        let page_url = compose_page_url(&board, page);
+    for page_num in range.clone() {
+        let page_url = compose_page_url(&board, page_num);
         match crawl_one_page_urls(client, &page_url).await {
             Ok(mut urls) => article_urls.append(&mut urls),
             Err(e) => {
-                error!("Error {:?} occurred when parsing {:?}", e, page_url);
+                error!("{:?} occurred when crawling {}", e, page_url);
                 error = e;
             }
         };
     }
 
+    info!(
+        "Finish crawling URLs of articles from board {} page {} to {}",
+        board,
+        range.start(),
+        range.end()
+    );
     if article_urls.is_empty() {
         error!("No URL was found");
         return Err(error);
@@ -108,8 +130,14 @@ pub async fn crawl_page_urls(
 pub async fn crawl_page_articles(
     client: &Client,
     board: &BoardName,
-    range: RangeInclusive<u32>,
+    range: &RangeInclusive<u32>,
 ) -> Result<Vec<Article>, Error> {
+    info!(
+        "Start crawling articles from board {} page {} to {}",
+        board,
+        range.start(),
+        range.end()
+    );
     let mut articles: Vec<Article> = vec![];
     let mut error: Error = Error::InvalidResponse;
     let article_urls = crawl_page_urls(client, board, range).await?;
@@ -117,12 +145,18 @@ pub async fn crawl_page_articles(
         match crawl_url(client, &url).await {
             Ok(article) => articles.push(article),
             Err(e) => {
-                error!("Error {:?} occurred when crawl {:?}", e, url);
+                error!("{:?} occurred when crawling {:?}", e, url);
                 error = e;
             }
         }
     }
 
+    info!(
+        "Finish crawling articles from board {} page {} to {}",
+        board,
+        range.start(),
+        range.end()
+    );
     if articles.is_empty() {
         error!("No article was found");
         return Err(error);
@@ -178,7 +212,7 @@ fn compose_page_url(board: &BoardName, page: u32) -> String {
 }
 
 async fn crawl_one_page_urls(client: &Client, url: &str) -> Result<Vec<String>, Error> {
-    info!("Start crawling article URLs of page {}", url);
+    info!("Start crawling article URLs in page {}", url);
     let document = transform_to_document(client, url).await?;
     let article_urls = document
         .find(Class("title"))
@@ -193,7 +227,7 @@ async fn crawl_one_page_urls(client: &Client, url: &str) -> Result<Vec<String>, 
             format!("{}{}", PTT_CC_URL, relative_path)
         })
         .collect();
-    info!("Succeeded to crawl page");
+    info!("Finish crawling article URLs in page {}", url);
     Ok(article_urls)
 }
 
