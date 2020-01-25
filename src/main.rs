@@ -8,6 +8,7 @@ use std::io::prelude::*;
 use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::process;
+use std::time::Duration;
 
 use enum_iterator::IntoEnumIterator;
 use reqwest::{Client, Proxy};
@@ -33,6 +34,9 @@ struct Opt {
     /// Proxy URL that crawler should pass requests to
     #[structopt(short, long, parse(from_os_str))]
     proxy: Option<PathBuf>,
+    /// Timeout in ms for the connect phase of a request
+    #[structopt(short, long, default_value = "3000")]
+    timeout: u64,
 
     #[structopt(subcommand)]
     cmd: SubCommand,
@@ -85,7 +89,7 @@ async fn main() {
             let url_string = url.into_os_string().into_string().unwrap();
 
             println!("Start crawling URL \"{}\"", url_string);
-            let client = create_client(proxies).await;
+            let client = create_client(proxies, opt.timeout).await;
             json_output = match crawler::crawl_url(&client, &url_string).await {
                 Ok(article) => serde_json::to_string_pretty(&article).unwrap(),
                 Err(e) => {
@@ -114,7 +118,7 @@ async fn main() {
                 );
                 process::exit(1);
             });
-            let client = create_client(proxies).await;
+            let client = create_client(proxies, opt.timeout).await;
             let page_count = crawler::crawl_page_count(&client, &board)
                 .await
                 .unwrap_or(0);
@@ -168,8 +172,8 @@ async fn main() {
     }
 }
 
-async fn create_client(proxies: Option<Vec<Proxy>>) -> Client {
-    match crawler::create_client(proxies).await {
+async fn create_client(proxies: Option<Vec<Proxy>>, connect_timeout: u64) -> Client {
+    match crawler::create_client(proxies, Some(Duration::from_millis(connect_timeout))).await {
         Ok(client) => client,
         Err(e) => {
             eprintln!("Error: Failed to create client\n({:#?})", e);

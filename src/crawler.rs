@@ -1,5 +1,6 @@
 use std::boxed::Box;
 use std::ops::RangeInclusive;
+use std::time::Duration;
 
 use regex::Regex;
 use reqwest::{redirect::Policy, Client, Proxy};
@@ -21,7 +22,10 @@ pub enum Error {
 
 /// Return a HTTP Client with cookie accepting over 18 agreement.
 /// One should reuse returned client as more as possible.
-pub async fn create_client(proxies: Option<Vec<Proxy>>) -> Result<Client, Error> {
+pub async fn create_client(
+    proxies: Option<Vec<Proxy>>,
+    connect_timeout: Option<Duration>,
+) -> Result<Client, Error> {
     let mut builder = reqwest::Client::builder()
         .cookie_store(true)
         .redirect(Policy::none());
@@ -29,6 +33,9 @@ pub async fn create_client(proxies: Option<Vec<Proxy>>) -> Result<Client, Error>
         while !proxy.is_empty() {
             builder = builder.proxy(proxy.pop().unwrap())
         }
+    }
+    if let Some(timeout) = connect_timeout {
+        builder = builder.connect_timeout(timeout);
     }
     let client = builder
         .build()
@@ -194,7 +201,12 @@ async fn transform_to_document(client: &Client, url: &str) -> Result<Document, E
             }
             r.text()
         }
-        Err(e) => return Err(Error::ConnectionError(e)),
+        Err(e) => {
+            if e.is_timeout() {
+                error!("Timeout occurred when requesting to {}", url);
+            }
+            return Err(Error::ConnectionError(e));
+        }
     };
     match text_future.await {
         Ok(t) => Ok(Document::from(t.as_str())),
