@@ -387,14 +387,21 @@ fn parse_reply(node: &Node, article_time: Option<DateTime<FixedOffset>>) -> Resu
         }
     };
 
-    let date = article_time.map(|t| {
+    let date = article_time.and_then(|t| {
         let mut year = t.year();
         if month == 2 && day == 29 {
             while !is_leap_year(year) {
                 year += 1;
             }
         }
-        TW_TIME_OFFSET.ymd(year, month, day).and_hms(hour, min, 0)
+
+        match TW_TIME_OFFSET
+            .ymd_opt(year, month, day)
+            .and_hms_opt(hour, min, 0)
+        {
+            LocalResult::Single(date) => Some(date),
+            _ => None,
+        }
     });
 
     Ok(Reply {
@@ -587,6 +594,23 @@ mod tests {
         );
 
         assert_eq!(parse_replies(&documents, article_date).len(), 1491)
+    }
+
+    #[test]
+    fn test_parse_replies_with_invalid_date() {
+        // contains "03/32"
+        let documents = load_document("../tests/WomenTalk_M.1143885175.A.C8D.html");
+        let article_date = Some(
+            FixedOffset::east(8 * 3600)
+                .ymd(2006, 4, 1)
+                .and_hms(18, 9, 31),
+        );
+
+        let replies = parse_replies(&documents, article_date);
+
+        for i in 0..=5 {
+            assert_eq!(replies[i].date, None);
+        }
     }
 
     #[test]
