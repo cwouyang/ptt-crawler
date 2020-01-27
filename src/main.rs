@@ -1,3 +1,4 @@
+extern crate fake_useragent;
 extern crate log;
 extern crate pretty_env_logger;
 extern crate pttcrawler;
@@ -11,6 +12,7 @@ use std::process;
 use std::time::Duration;
 
 use enum_iterator::IntoEnumIterator;
+use fake_useragent::UserAgents;
 use reqwest::{Client, Proxy};
 use structopt::StructOpt;
 
@@ -31,6 +33,9 @@ struct Opt {
     /// Outputs results to file in JSON format
     #[structopt(short, long, parse(from_os_str))]
     output: Option<PathBuf>,
+    /// User agent that crawler should use. Pass "random" to use randomly generated one.
+    #[structopt(short, long, parse(from_os_str))]
+    user_agent: Option<PathBuf>,
     /// Proxy URL that crawler should pass requests to
     #[structopt(short, long, parse(from_os_str))]
     proxy: Option<PathBuf>,
@@ -73,6 +78,17 @@ async fn main() {
         pretty_env_logger::init();
     }
 
+    let mut user_agent: Option<String> = None;
+    if let Some(ua) = opt.user_agent {
+        let ua_string = ua.into_os_string().into_string().unwrap();
+        if ua_string == "random" {
+            let user_agents = UserAgents::new();
+            user_agent = Some(user_agents.random().to_owned());
+        } else {
+            user_agent = Some(ua_string);
+        }
+    }
+
     let mut proxies: Option<Vec<Proxy>> = None;
     if let Some(proxy_string) = opt.proxy {
         let proxy = reqwest::Proxy::https(&proxy_string.into_os_string().into_string().unwrap())
@@ -89,8 +105,8 @@ async fn main() {
             let url_string = url.into_os_string().into_string().unwrap();
 
             println!("Start crawling URL \"{}\"", url_string);
-            let client = create_client(proxies, opt.timeout).await;
-            json_output = match crawler::crawl_url(&client, &url_string).await {
+            let client = create_client(user_agent, proxies, opt.timeout).await;
+            json_output = match crawler::crawl_url(&client, &url_string, None).await {
                 Ok(article) => serde_json::to_string_pretty(&article).unwrap(),
                 Err(e) => {
                     eprintln!("Error: Failed to crawl with error\n{:#?}", e);
@@ -118,7 +134,7 @@ async fn main() {
                 );
                 process::exit(1);
             });
-            let client = create_client(proxies, opt.timeout).await;
+            let client = create_client(user_agent, proxies, opt.timeout).await;
             let page_count = crawler::crawl_page_count(&client, &board)
                 .await
                 .unwrap_or(0);
@@ -172,8 +188,18 @@ async fn main() {
     }
 }
 
-async fn create_client(proxies: Option<Vec<Proxy>>, connect_timeout: u64) -> Client {
-    match crawler::create_client(proxies, Some(Duration::from_millis(connect_timeout))).await {
+async fn create_client(
+    user_agent: Option<String>,
+    proxies: Option<Vec<Proxy>>,
+    connect_timeout: u64,
+) -> Client {
+    match crawler::create_client(
+        user_agent,
+        proxies,
+        Some(Duration::from_millis(connect_timeout)),
+    )
+    .await
+    {
         Ok(client) => client,
         Err(e) => {
             eprintln!("Error: Failed to create client\n({:#?})", e);

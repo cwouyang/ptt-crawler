@@ -3,7 +3,7 @@ use std::ops::RangeInclusive;
 use std::time::Duration;
 
 use regex::Regex;
-use reqwest::{redirect::Policy, Client, Proxy};
+use reqwest::{header, redirect::Policy, Client, Proxy};
 use select::document::Document;
 use select::predicate::{Class, Name, Predicate};
 use url::Url;
@@ -23,12 +23,16 @@ pub enum Error {
 /// Return a HTTP Client with cookie accepting over 18 agreement.
 /// One should reuse returned client as more as possible.
 pub async fn create_client(
+    user_agent: Option<String>,
     proxies: Option<Vec<Proxy>>,
     connect_timeout: Option<Duration>,
 ) -> Result<Client, Error> {
     let mut builder = reqwest::Client::builder()
         .cookie_store(true)
         .redirect(Policy::none());
+    if let Some(ua) = user_agent {
+        builder = builder.user_agent(ua);
+    }
     if let Some(mut proxy) = proxies {
         while !proxy.is_empty() {
             builder = builder.proxy(proxy.pop().unwrap())
@@ -57,7 +61,7 @@ pub async fn crawl_page_count(client: &Client, board: &BoardName) -> Result<u32,
 
     info!("Start crawling page count of board {}", board);
     let latest_page_url = compose_page_url(&board, 0);
-    let document = transform_to_document(client, &latest_page_url).await?;
+    let document = transform_to_document(client, &latest_page_url, None).await?;
     let last_page_url = match document
         .find(Name("a").and(Class("wide")))
         .find(|n| n.text() == "‹ 上頁")
@@ -82,14 +86,18 @@ pub async fn crawl_page_count(client: &Client, board: &BoardName) -> Result<u32,
 }
 
 /// Given a URL, crawls the page and parses it into an Article.
-pub async fn crawl_url(client: &Client, url: &str) -> Result<Article, Error> {
+pub async fn crawl_url(
+    client: &Client,
+    url: &str,
+    user_agent: Option<String>,
+) -> Result<Article, Error> {
     info!("Start crawling article with URL {}", url);
     if !is_supported_url(url) {
         error!("not supported URL {}", url);
         return Err(Error::InvalidUrl);
     }
 
-    let document = transform_to_document(client, url).await?;
+    let document = transform_to_document(client, url, user_agent).await?;
     let result = parser::parse(&document).map_err(|_| Error::InvalidResponse);
     info!("Finish crawling article with URL {}", url);
     result
@@ -149,7 +157,7 @@ pub async fn crawl_page_articles(
     let mut error: Error = Error::InvalidResponse;
     let article_urls = crawl_page_urls(client, board, range).await?;
     for url in article_urls {
-        match crawl_url(client, &url).await {
+        match crawl_url(client, &url, None).await {
             Ok(article) => articles.push(article),
             Err(e) => {
                 error!("{:?} occurred when crawling {:?}", e, url);
@@ -193,8 +201,17 @@ fn is_supported_url(url: &str) -> bool {
         .fold(true, |ok, (segment, predicate)| ok && predicate(segment))
 }
 
-async fn transform_to_document(client: &Client, url: &str) -> Result<Document, Error> {
-    let text_future = match client.get(url).send().await {
+async fn transform_to_document(
+    client: &Client,
+    url: &str,
+    user_agent: Option<String>,
+) -> Result<Document, Error> {
+    let mut request = client.get(url);
+    if let Some(ua) = user_agent {
+        request = request.header(header::USER_AGENT, ua);
+    }
+
+    let text_future = match request.send().await {
         Ok(r) => {
             if !r.status().is_success() {
                 return Err(Error::InvalidResponse);
@@ -225,7 +242,7 @@ fn compose_page_url(board: &BoardName, page: u32) -> String {
 
 async fn crawl_one_page_urls(client: &Client, url: &str) -> Result<Vec<String>, Error> {
     info!("Start crawling article URLs in page {}", url);
-    let document = transform_to_document(client, url).await?;
+    let document = transform_to_document(client, url, None).await?;
     let article_urls = document
         .find(Class("title"))
         .flat_map(|n| {
@@ -249,22 +266,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_crawl_not_ptt_url() {
-        let client = create_client(None).await.unwrap();
+        let client = create_client(None, None, None).await.unwrap();
 
-        assert!(match crawl_url(&client, "https://www.google.com").await {
-            Err(e) => match e {
-                Error::InvalidUrl => true,
+        assert!(
+            match crawl_url(&client, "https://www.google.com", None).await {
+                Err(e) => match e {
+                    Error::InvalidUrl => true,
+                    _ => false,
+                },
                 _ => false,
-            },
-            _ => false,
-        });
+            }
+        );
     }
 
     #[tokio::test]
     async fn test_crawl_invalid_ptt_url() {
-        let client = create_client(None).await.unwrap();
+        let client = create_client(None, None, None).await.unwrap();
 
-        assert!(match crawl_url(&client, "https://www.ptt.cc").await {
+        assert!(match crawl_url(&client, "https://www.ptt.cc", None).await {
             Err(e) => match e {
                 Error::InvalidUrl => true,
                 _ => false,
@@ -275,10 +294,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_crawl_none_exist_ptt_url() {
-        let client = create_client(None).await.unwrap();
+        let client = create_client(None, None, None).await.unwrap();
 
         assert!(
-            match crawl_url(&client, "https://www.ptt.cc/bbs/Gossiping/M.html").await {
+            match crawl_url(&client, "https://www.ptt.cc/bbs/Gossiping/M.html", None).await {
                 Err(e) => match e {
                     Error::InvalidResponse => true,
                     _ => false,
