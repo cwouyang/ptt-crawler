@@ -276,7 +276,13 @@ fn parse_ip(document: &Document) -> Result<Ipv4Addr, Error> {
         }
     };
     match RE.captures(&str_contain_ip) {
-        Some(cap) => Ok(cap["ip"].parse::<Ipv4Addr>().unwrap()),
+        Some(cap) => {
+            let ip = &cap["ip"];
+            ip.parse::<Ipv4Addr>().map_err(|_| {
+                error!("Invalid IP {}", ip);
+                Error::FieldNotFound("ip".to_owned())
+            })
+        }
         None => {
             error!("IP field not found");
             Err(Error::FieldNotFound("ip".to_owned()))
@@ -619,6 +625,15 @@ mod tests {
         assert_eq!(
             parse_ip(&documents).unwrap(),
             Ipv4Addr::new(140, 118, 229, 94)
+        );
+    }
+
+    #[test]
+    fn test_parse_invalid_ip() {
+        let documents = load_document("../tests/Soft_Job_M.1519661420.A.098.html");
+        assert_eq!(
+            parse_ip(&documents),
+            Err(Error::FieldNotFound("ip".to_owned()))
         );
     }
 
