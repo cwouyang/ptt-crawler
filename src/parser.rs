@@ -12,7 +12,7 @@ lazy_static! {
 }
 
 /// Error represents the errors which might occur when parsing.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Error {
     DeletedArticle,
     InvalidFormat,
@@ -26,7 +26,7 @@ pub fn parse(document: &Document) -> Result<Article, Error> {
     }
 
     let meta = parse_meta(&document)?;
-    let content = parse_content(&document);
+    let content = parse_content(&document)?;
     let replies = parse_replies(&document, meta.date);
 
     let reply_count = ReplyCount {
@@ -292,16 +292,24 @@ fn get_main_content(document: &Document) -> String {
         .text()
 }
 
-fn parse_content(document: &Document) -> String {
+fn parse_content(document: &Document) -> Result<String, Error> {
     let main_content = get_main_content(document);
-    let content_start_index = main_content.find('\n').unwrap();
-    let content_end_index = main_content[(content_start_index + 1)..]
-        .find("\n※")
-        .unwrap()
-        + content_start_index
-        + 1;
+    let content_start_index = match main_content.find('\n') {
+        Some(start_index) => start_index,
+        None => {
+            error!("Failed to find start of content");
+            return Err(Error::InvalidFormat);
+        }
+    };
+    let content_end_index = match main_content[(content_start_index + 1)..].find("\n※") {
+        Some(end_index) => end_index + content_start_index + 1,
+        None => {
+            error!("Failed to find end of content");
+            return Err(Error::InvalidFormat);
+        }
+    };
     let content = &main_content[content_start_index..content_end_index];
-    content.trim().to_owned()
+    Ok(content.trim().to_owned())
 }
 
 fn parse_replies(document: &Document, article_time: Option<DateTime<FixedOffset>>) -> Vec<Reply> {
@@ -612,5 +620,11 @@ mod tests {
             parse_ip(&documents).unwrap(),
             Ipv4Addr::new(140, 118, 229, 94)
         );
+    }
+
+    #[test]
+    fn test_parse_malformed_content() {
+        let documents = load_document("../tests/Gossiping_M.1519661420.A.098.html");
+        assert_eq!(parse_content(&documents), Err(Error::InvalidFormat));
     }
 }
