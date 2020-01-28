@@ -328,7 +328,7 @@ fn parse_replies(document: &Document, article_time: Option<DateTime<FixedOffset>
 fn parse_reply(node: &Node, article_time: Option<DateTime<FixedOffset>>) -> Result<Reply, Error> {
     lazy_static! {
         static ref RE: Regex = Regex::new(
-            r"(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})?\s?(?P<month>\d{2})/(?P<day>\d{2})(\s*(?P<hour>\d{2}):(?P<min>\d{2}))?"
+            r"(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})?\s?(?P<month>\d{2})/(?P<day>\d{2})(\s*(?P<hour>\d{2}):(?P<min>\d{2}))?"
         )
         .unwrap();
     }
