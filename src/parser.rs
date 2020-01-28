@@ -351,39 +351,59 @@ fn parse_reply(node: &Node, article_time: Option<DateTime<FixedOffset>>) -> Resu
         .nth(0)
         .unwrap()
         .text();
-    let content = node
+    let mut content = node
         .find(Name("span").and(Class("push-content")))
         .nth(0)
         .unwrap()
         .text()
         .trim_start_matches(|c| (c == ':' || c == ' '))
+        .trim()
         .to_owned();
     let mut ip_and_time = node
         .find(Name("span").and(Class("push-ipdatetime")))
         .nth(0)
         .unwrap()
         .text();
+
     ip_and_time = ip_and_time.trim().to_owned();
+    let ip_and_time_parser = |cap: regex::Captures| {
+        let ip = cap
+            .name("ip")
+            .map(|m| m.as_str().parse::<Ipv4Addr>().unwrap());
+        let month = cap["month"].parse::<u32>().unwrap();
+        let day = cap["day"].parse::<u32>().unwrap();
+        let hour: u32 = match cap.name("hour") {
+            Some(m) => m.as_str().parse::<u32>().unwrap(),
+            None => 0,
+        };
+        let min: u32 = match cap.name("min") {
+            Some(m) => m.as_str().parse::<u32>().unwrap(),
+            None => 0,
+        };
+        (ip, month, day, hour, min)
+    };
     let (ip, month, day, hour, min) = match RE.captures(&ip_and_time) {
-        Some(cap) => {
-            let ip = cap
-                .name("ip")
-                .map(|m| m.as_str().parse::<Ipv4Addr>().unwrap());
-            let month = cap["month"].parse::<u32>().unwrap();
-            let day = cap["day"].parse::<u32>().unwrap();
-            let hour: u32 = match cap.name("hour") {
-                Some(m) => m.as_str().parse::<u32>().unwrap(),
-                None => 0,
-            };
-            let min: u32 = match cap.name("min") {
-                Some(m) => m.as_str().parse::<u32>().unwrap(),
-                None => 0,
-            };
-            (ip, month, day, hour, min)
-        }
+        Some(cap) => ip_and_time_parser(cap),
         None => {
-            warn!("Invalid format of reply {:?}", node.text());
-            return Err(Error::InvalidFormat);
+            warn!(
+                "IP and date of reply \"{:?}\" were not found, try find them in content",
+                node.text()
+            );
+            match RE.captures(&content) {
+                Some(cap) => {
+                    let (ip, month, day, hour, min) = ip_and_time_parser(cap);
+                    // Remove IP and date from content
+                    if let Some(ip) = ip {
+                        let ip_start_index = content.find(&ip.to_string()).unwrap();
+                        content = content[..ip_start_index].trim().to_owned();
+                    }
+                    (ip, month, day, hour, min)
+                }
+                None => {
+                    warn!("Invalid format of reply {:?}", node.text());
+                    return Err(Error::InvalidFormat);
+                }
+            }
         }
     };
 
