@@ -20,6 +20,12 @@ pub enum Error {
     InvalidResponse,
 }
 
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Error {
+        Error::ConnectionError(err)
+    }
+}
+
 /// Return a HTTP Client with cookie accepting over 18 agreement.
 /// One should reuse returned client as more as possible.
 pub async fn create_client(
@@ -41,12 +47,10 @@ pub async fn create_client(
     if let Some(timeout) = connect_timeout {
         builder = builder.connect_timeout(timeout);
     }
-    let client = builder
-        .build()
-        .or_else(|e| Err(Error::ConnectionError(e)))?;
 
     let params = [("yes", "yes")];
     let url = format!("{}/ask/over18", PTT_CC_URL);
+    let client = builder.build()?;
     match client.post(&url).form(&params).send().await {
         Ok(_) => Ok(client),
         Err(e) => Err(Error::ConnectionError(e)),
