@@ -84,7 +84,7 @@ fn parse_meta(document: &Document) -> Result<Meta, Error> {
 fn parse_id(document: &Document) -> String {
     let url = document
         .find(Name("link").and(Attr("rel", "canonical")))
-        .nth(0)
+        .next()
         .unwrap()
         .attr("href")
         .unwrap();
@@ -103,7 +103,7 @@ fn parse_title(document: &Document) -> Result<(Option<String>, String), Error> {
 
     let original_title = match document
         .find(Name("meta").and(Attr("property", "og:title")))
-        .nth(0)
+        .next()
     {
         Some(n) => n.attr("content").unwrap().to_owned(),
         None => {
@@ -151,7 +151,7 @@ fn parse_author(document: &Document) -> Result<(String, Option<String>), Error> 
 
     let author = match document
         .find(Name("span").and(Class("article-meta-value")))
-        .nth(0)
+        .next()
     {
         Some(n) => n.text(),
         None => {
@@ -293,7 +293,7 @@ fn parse_ip(document: &Document) -> Result<Ipv4Addr, Error> {
 fn get_main_content(document: &Document) -> String {
     document
         .find(Name("div").and(Attr("id", "main-content")))
-        .nth(0)
+        .next()
         .unwrap()
         .text()
 }
@@ -340,7 +340,7 @@ fn parse_reply(node: &Node, article_time: Option<DateTime<FixedOffset>>) -> Resu
 
     let reply_type = node
         .find(Name("span").and(Class("push-tag")))
-        .nth(0)
+        .next()
         .unwrap()
         .text()
         .trim()
@@ -348,12 +348,12 @@ fn parse_reply(node: &Node, article_time: Option<DateTime<FixedOffset>>) -> Resu
         .unwrap();
     let author_id = node
         .find(Name("span").and(Class("push-userid")))
-        .nth(0)
+        .next()
         .unwrap()
         .text();
     let mut content = node
         .find(Name("span").and(Class("push-content")))
-        .nth(0)
+        .next()
         .unwrap()
         .text()
         .trim_start_matches(|c| (c == ':' || c == ' '))
@@ -361,7 +361,7 @@ fn parse_reply(node: &Node, article_time: Option<DateTime<FixedOffset>>) -> Resu
         .to_owned();
     let mut ip_and_time = node
         .find(Name("span").and(Class("push-ipdatetime")))
-        .nth(0)
+        .next()
         .unwrap()
         .text();
 
