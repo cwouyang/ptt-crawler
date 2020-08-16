@@ -1,7 +1,7 @@
 extern crate fake_useragent;
 extern crate log;
 extern crate pretty_env_logger;
-extern crate pttcrawler;
+extern crate ptt_crawler;
 
 use std::env;
 use std::fs::File;
@@ -16,8 +16,8 @@ use fake_useragent::UserAgents;
 use reqwest::{Client, Proxy};
 use structopt::StructOpt;
 
-use pttcrawler::article::BoardName;
-use pttcrawler::crawler;
+use ptt_crawler::article::BoardName;
+use ptt_crawler::crawler;
 
 #[derive(StructOpt)]
 #[structopt(
